@@ -25,9 +25,45 @@ export default async function DashboardLayout({
     rol: m.rol,
   }));
 
-  // No locales -> create first one
+  // No locales -> show empty state
   if (locales.length === 0) {
-    redirect('/crear-local');
+    return (
+      <div>
+        <header style={headerStyles.header}>
+          <div style={headerStyles.left}>
+            <span style={{ fontSize: 24 }}>&#9749;</span>
+            <h1 style={headerStyles.title}>Manolo Costeo</h1>
+          </div>
+          <div style={headerStyles.right}>
+            <span style={headerStyles.email}>{user.email}</span>
+            <form action={signOut}>
+              <button type="submit" style={headerStyles.logoutBtn}>Salir</button>
+            </form>
+          </div>
+        </header>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 'calc(100vh - 60px)', padding: 20 }}>
+          <div style={{ textAlign: 'center', maxWidth: 400 }}>
+            <span style={{ fontSize: 64, display: 'block' }}>&#127978;</span>
+            <h2 style={{ fontSize: 22, fontWeight: 700, marginTop: 16 }}>Bienvenido!</h2>
+            <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 8, marginBottom: 24 }}>
+              Todavia no tenes ningun local. Crea el primero para empezar a registrar gastos.
+            </p>
+            <a href="/crear-local" style={{
+              display: 'inline-block',
+              padding: '12px 24px',
+              background: 'var(--accent)',
+              color: '#fff',
+              borderRadius: 'var(--radius-sm)',
+              fontSize: 14,
+              fontWeight: 600,
+              textDecoration: 'none',
+            }}>
+              Crear mi primer local
+            </a>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   // Get selected local from cookie
