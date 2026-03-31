@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 
 export async function crearLocal(formData: FormData) {
-  const supabase = await createClient();
+  const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) throw new Error('No autenticado');
@@ -22,20 +22,20 @@ export async function crearLocal(formData: FormData) {
   if (error) throw new Error(error.message);
 
   // Set selected local cookie
-  const cookieStore = await cookies();
+  const cookieStore = cookies();
   cookieStore.set('selected_local', data.id, { path: '/', maxAge: 60 * 60 * 24 * 365 });
 
   redirect('/dashboard');
 }
 
 export async function seleccionarLocal(localId: string) {
-  const cookieStore = await cookies();
+  const cookieStore = cookies();
   cookieStore.set('selected_local', localId, { path: '/', maxAge: 60 * 60 * 24 * 365 });
   redirect('/dashboard');
 }
 
 export async function crearInvitacion(localId: string, tipo: 'link' | 'email', email?: string) {
-  const supabase = await createClient();
+  const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) throw new Error('No autenticado');
@@ -57,7 +57,7 @@ export async function crearInvitacion(localId: string, tipo: 'link' | 'email', e
 }
 
 export async function aceptarInvitacion(codigo: string) {
-  const supabase = await createClient();
+  const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) throw new Error('No autenticado');
@@ -94,14 +94,14 @@ export async function aceptarInvitacion(codigo: string) {
     .eq('id', invitation.id);
 
   // Set selected local
-  const cookieStore = await cookies();
+  const cookieStore = cookies();
   cookieStore.set('selected_local', invitation.local_id, { path: '/', maxAge: 60 * 60 * 24 * 365 });
 
   redirect('/dashboard');
 }
 
 export async function signOut() {
-  const supabase = await createClient();
+  const supabase = createClient();
   await supabase.auth.signOut();
   redirect('/');
 }

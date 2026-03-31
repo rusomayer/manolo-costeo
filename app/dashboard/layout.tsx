@@ -9,7 +9,7 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
+  const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) redirect('/');
@@ -31,7 +31,7 @@ export default async function DashboardLayout({
   }
 
   // Get selected local from cookie
-  const cookieStore = await cookies();
+  const cookieStore = cookies();
   const selectedLocalId = cookieStore.get('selected_local')?.value;
   const selectedLocal = locales.find((l) => l.id === selectedLocalId) || locales[0];
 

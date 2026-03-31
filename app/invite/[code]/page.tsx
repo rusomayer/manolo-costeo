@@ -3,7 +3,7 @@ import { aceptarInvitacion } from '@/lib/actions';
 import { redirect } from 'next/navigation';
 
 export default async function InvitePage({ params }: { params: { code: string } }) {
-  const supabase = await createClient();
+  const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
   // Not logged in -> redirect to login with return URL
