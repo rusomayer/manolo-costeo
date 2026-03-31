@@ -1,17 +1,28 @@
 const TELEGRAM_API = 'https://api.telegram.org/bot';
 
-export async function enviarMensaje(chatId: number, texto: string, replyToMessageId?: number) {
+export async function enviarMensaje(
+  chatId: number,
+  texto: string,
+  replyToMessageId?: number,
+  forceReply?: boolean
+): Promise<{ result: { message_id: number } }> {
   const token = process.env.TELEGRAM_BOT_TOKEN;
-  
+
+  const body: Record<string, unknown> = {
+    chat_id: chatId,
+    text: texto,
+    parse_mode: 'HTML',
+    reply_to_message_id: replyToMessageId,
+  };
+
+  if (forceReply) {
+    body.reply_markup = { force_reply: true, selective: true };
+  }
+
   const response = await fetch(`${TELEGRAM_API}${token}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text: texto,
-      parse_mode: 'HTML',
-      reply_to_message_id: replyToMessageId,
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
@@ -51,6 +62,8 @@ export function formatearRespuesta(gasto: {
   categoria: string;
   proveedor?: string;
   confianza?: string;
+  cantidad?: number;
+  unidad?: string;
 }): string {
   const monto = new Intl.NumberFormat('es-AR', {
     style: 'currency',
@@ -75,6 +88,10 @@ export function formatearRespuesta(gasto: {
   respuesta += `💰 ${monto}\n`;
   respuesta += `📁 ${gasto.categoria.charAt(0).toUpperCase() + gasto.categoria.slice(1)}`;
   
+  if (gasto.cantidad && gasto.unidad) {
+    respuesta += `\n📦 ${gasto.cantidad} ${gasto.unidad}`;
+  }
+
   if (gasto.proveedor) {
     respuesta += `\n🏪 ${gasto.proveedor}`;
   }

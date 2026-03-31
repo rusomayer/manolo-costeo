@@ -17,6 +17,8 @@ export interface Gasto {
   proveedor?: string;
   metodo_pago: string;
   notas?: string;
+  cantidad?: number;
+  unidad?: string;
   telegram_message_id?: string;
   archivo_url?: string;
 }
@@ -29,6 +31,8 @@ export interface GastoInput {
   metodo_pago?: string;
   notas?: string;
   fecha?: string;
+  cantidad?: number;
+  unidad?: string;
 }
 
 export interface TelegramMessage {
@@ -48,6 +52,10 @@ export interface TelegramMessage {
   voice?: TelegramVoice;
   document?: TelegramDocument;
   caption?: string;
+  reply_to_message?: {
+    message_id: number;
+    from?: { id: number; is_bot?: boolean };
+  };
 }
 
 export interface TelegramPhoto {
@@ -87,4 +95,10 @@ export interface ClaudeGastoResponse {
   fecha?: string;
   confianza: 'alta' | 'media' | 'baja';
   notas?: string;
+  cantidad?: number;
+  unidad?: string;
+  campos_faltantes?: {
+    campo: 'cantidad_unidad' | 'fecha';
+    pregunta: string;
+  }[];
 }

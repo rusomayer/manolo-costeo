@@ -25,7 +25,9 @@ RESPONDE SIEMPRE EN JSON con este formato exacto:
   "proveedor": "nombre del proveedor si se menciona",
   "fecha": "2024-01-15 si se menciona una fecha específica, sino null",
   "confianza": "alta/media/baja",
-  "notas": "cualquier detalle adicional relevante"
+  "notas": "cualquier detalle adicional relevante",
+  "cantidad": 5.0,
+  "unidad": "kg"
 }
 
 REGLAS:
@@ -33,7 +35,32 @@ REGLAS:
 - Si no podés determinar el monto con certeza, poné confianza "baja"
 - Si el mensaje no parece ser un gasto, respondé con monto: 0 y confianza: "baja"
 - Usá tu mejor criterio para categorizar
-- En "descripcion" sé conciso pero claro (máx 50 caracteres)`;
+- En "descripcion" sé conciso pero claro (máx 50 caracteres)
+- "cantidad" y "unidad" son OPCIONALES: solo incluirlos si el dato está presente en el mensaje o factura
+- Si se menciona "5kg de café", cantidad: 5, unidad: "kg"
+- Si se menciona "20 litros de leche", cantidad: 20, unidad: "litros"
+- Si se menciona "3 cajas de azúcar", cantidad: 3, unidad: "cajas"
+- Si no se menciona cantidad, poné cantidad: null y unidad: null
+- NO inventar cantidades, solo extraerlas si están explícitas
+
+CAMPOS FALTANTES:
+Agregá un campo "campos_faltantes" como array SOLO cuando falte información útil.
+Solo UNA pregunta por vez (la más importante).
+
+1. "cantidad_unidad": Si la categoría es "insumos" y NO se mencionó cantidad ni unidad.
+   - SÍ preguntar: "Compré café $45.000" (falta cuánto), "Leche $18.000" (falta cuánta)
+   - NO preguntar: "Pagué la luz", "Sueldo de Juan", "Alquiler marzo" (no son insumos)
+   - Ejemplo de pregunta: "¿Cuánto compraste? (ej: 5kg, 20 litros, 3 cajas)"
+
+2. "fecha": Si NO se mencionó ninguna fecha o referencia temporal (hoy, ayer, lunes, etc.)
+   - Ejemplo de pregunta: "¿Esto fue hoy u otro día?"
+
+Prioridad: cantidad_unidad > fecha.
+Si la cantidad YA está en el mensaje, NO preguntar por ella.
+Si no falta nada relevante, NO incluir campos_faltantes.
+
+Formato del campo:
+"campos_faltantes": [{"campo": "cantidad_unidad", "pregunta": "¿Cuántos kg/litros/unidades compraste?"}]`;
 
 export async function procesarTexto(texto: string): Promise<ClaudeGastoResponse> {
   const response = await anthropic.messages.create({
@@ -156,13 +183,55 @@ export async function procesarAudio(transcripcion: string): Promise<ClaudeGastoR
   return procesarTexto(transcripcion);
 }
 
-// Transcribir audio usando la descripción que da Telegram o un servicio externo
+export async function procesarRespuestaFollowUp(
+  gastoOriginal: ClaudeGastoResponse,
+  respuestaUsuario: string,
+  campoEsperado: string
+): Promise<ClaudeGastoResponse> {
+  const response = await anthropic.messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 500,
+    system: `Sos un asistente que actualiza datos de gastos de un café/bar.
+Te dan un gasto ya parseado y la respuesta del usuario a una pregunta sobre un dato faltante.
+Devolvé el JSON del gasto actualizado. Mismo formato. No cambies campos que ya tenían valor.
+NO incluyas "campos_faltantes" en la respuesta.`,
+    messages: [
+      {
+        role: 'user',
+        content: `Gasto original:\n${JSON.stringify(gastoOriginal)}\n\nSe le preguntó por: ${campoEsperado}\nEl usuario respondió: "${respuestaUsuario}"\n\nDevolvé el JSON actualizado.`,
+      },
+    ],
+  });
+
+  const content = response.content[0];
+  if (content.type !== 'text') {
+    throw new Error('Respuesta inesperada de Claude');
+  }
+
+  try {
+    const jsonStr = content.text.replace(/```json\n?|\n?```/g, '').trim();
+    return JSON.parse(jsonStr);
+  } catch (e) {
+    console.error('Error parseando respuesta follow-up:', content.text);
+    throw new Error('No pude entender la respuesta');
+  }
+}
+
 export async function transcribirAudio(audioBuffer: Buffer): Promise<string> {
-  // Nota: Claude no puede procesar audio directamente
-  // Opciones:
-  // 1. Usar OpenAI Whisper API
-  // 2. Usar Google Speech-to-Text
-  // 3. Usar AssemblyAI
-  // Por ahora retornamos un mensaje pidiendo texto
-  throw new Error('AUDIO_NOT_SUPPORTED');
+  const OpenAI = (await import('openai')).default;
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+  const file = new File([audioBuffer], 'audio.ogg', { type: 'audio/ogg' });
+
+  const transcription = await openai.audio.transcriptions.create({
+    file,
+    model: 'whisper-1',
+    language: 'es',
+  });
+
+  if (!transcription.text || transcription.text.trim().length === 0) {
+    throw new Error('No se pudo transcribir el audio');
+  }
+
+  return transcription.text;
 }

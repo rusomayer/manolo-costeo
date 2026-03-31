@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { TelegramUpdate, TelegramMessage } from '@/lib/types';
 import { enviarMensaje, obtenerArchivo, formatearRespuesta, formatearError } from '@/lib/telegram';
-import { procesarTexto, procesarImagen, procesarPDF } from '@/lib/claude';
-import { guardarGasto } from '@/lib/supabase';
+import { procesarTexto, procesarImagen, procesarPDF, transcribirAudio, procesarAudio, procesarRespuestaFollowUp } from '@/lib/claude';
+import { guardarGasto, guardarGastoPendiente, buscarGastoPendiente, eliminarGastoPendiente, limpiarPendientesExpirados } from '@/lib/supabase';
+import { ClaudeGastoResponse } from '@/lib/types';
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,6 +17,31 @@ export async function POST(request: NextRequest) {
     const message = update.message;
     const chatId = message.chat.id;
     const messageId = message.message_id;
+
+    // Limpiar pendientes expirados
+    await limpiarPendientesExpirados();
+
+    // Verificar si es respuesta a una pregunta de follow-up
+    if (message.reply_to_message?.from?.is_bot && message.text) {
+      const pendiente = await buscarGastoPendiente(chatId, message.reply_to_message.message_id);
+      if (pendiente) {
+        try {
+          const merged = await procesarRespuestaFollowUp(
+            pendiente.gasto_data,
+            message.text,
+            pendiente.campo_esperado
+          );
+          await guardarGasto({ ...merged, telegram_message_id: String(messageId) });
+          await eliminarGastoPendiente(pendiente.id);
+          await enviarMensaje(chatId, formatearRespuesta(merged), messageId);
+        } catch (error) {
+          console.error('Error procesando follow-up:', error);
+          const errorMsg = error instanceof Error ? error.message : 'Error desconocido';
+          await enviarMensaje(chatId, formatearError(errorMsg), messageId);
+        }
+        return NextResponse.json({ ok: true });
+      }
+    }
 
     try {
       // Procesar según el tipo de mensaje
@@ -103,7 +129,9 @@ async function procesarMensajeTexto(message: TelegramMessage, chatId: number, me
     return;
   }
 
-  // Guardar en la base de datos
+  // Preguntar si falta info antes de guardar
+  if (await preguntarSiFalta(resultado, chatId, messageId)) return;
+
   await guardarGasto({
     ...resultado,
     telegram_message_id: String(messageId),
@@ -130,6 +158,8 @@ async function procesarFoto(message: TelegramMessage, chatId: number, messageId:
     );
     return;
   }
+
+  if (await preguntarSiFalta(resultado, chatId, messageId)) return;
 
   await guardarGasto({
     ...resultado,
@@ -166,6 +196,8 @@ async function procesarDocumento(message: TelegramMessage, chatId: number, messa
     return;
   }
 
+  if (await preguntarSiFalta(resultado, chatId, messageId)) return;
+
   await guardarGasto({
     ...resultado,
     telegram_message_id: String(messageId),
@@ -175,15 +207,52 @@ async function procesarDocumento(message: TelegramMessage, chatId: number, messa
 }
 
 async function procesarVoz(message: TelegramMessage, chatId: number, messageId: number) {
-  // Por ahora, pedimos que escriban porque Claude no procesa audio directamente
-  // En producción: usar Whisper o similar para transcribir
+  await enviarMensaje(chatId, '🎤 Transcribiendo audio...', messageId);
+
+  const { buffer } = await obtenerArchivo(message.voice!.file_id);
+  const transcripcion = await transcribirAudio(buffer);
+  const resultado = await procesarAudio(transcripcion);
+
+  if (resultado.monto === 0 || resultado.confianza === 'baja') {
+    await enviarMensaje(
+      chatId,
+      `🎤 Escuché: "<i>${transcripcion}</i>"\n\n🤔 No pude identificar un gasto claro. ¿Podés repetirlo o escribirlo?`,
+      messageId
+    );
+    return;
+  }
+
+  if (await preguntarSiFalta(resultado, chatId, messageId)) return;
+
+  await guardarGasto({
+    ...resultado,
+    telegram_message_id: String(messageId),
+  });
+
   await enviarMensaje(
     chatId,
-    '🎤 Por ahora no puedo procesar audios directamente.\n\n' +
-    '¿Podés escribir el gasto? Por ejemplo:\n' +
-    '"Compré 5kg de café a $45.000"',
+    `🎤 Escuché: "<i>${transcripcion}</i>"\n\n${formatearRespuesta(resultado)}`,
     messageId
   );
+}
+
+async function preguntarSiFalta(
+  resultado: ClaudeGastoResponse,
+  chatId: number,
+  messageId: number
+): Promise<boolean> {
+  if (!resultado.campos_faltantes?.length) return false;
+
+  const faltante = resultado.campos_faltantes[0];
+  const sentMsg = await enviarMensaje(chatId, faltante.pregunta, messageId, true);
+  await guardarGastoPendiente({
+    chatId,
+    botMessageId: sentMsg.result.message_id,
+    gastoData: resultado,
+    pregunta: faltante.pregunta,
+    campoEsperado: faltante.campo,
+  });
+  return true;
 }
 
 // Verificación del webhook (GET request de Telegram)
