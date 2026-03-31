@@ -191,13 +191,17 @@ export async function procesarAudio(transcripcion: string, timezone?: string): P
 export async function procesarRespuestaFollowUp(
   gastoOriginal: ClaudeGastoResponse,
   respuestaUsuario: string,
-  campoEsperado: string
+  campoEsperado: string,
+  timezone?: string
 ): Promise<ClaudeGastoResponse> {
+  const tz = timezone || 'America/Buenos_Aires';
+  const hoy = new Date().toLocaleDateString('en-CA', { timeZone: tz });
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-20250514',
     max_tokens: 500,
     system: `Sos un asistente que actualiza datos de gastos de un café/bar.
 Te dan un gasto ya parseado y la respuesta del usuario a una pregunta sobre un dato faltante.
+HOY es ${hoy}. Si el usuario dice "hoy", usa esta fecha. Si dice "ayer", resta un dia.
 Devolvé el JSON del gasto actualizado. Mismo formato. No cambies campos que ya tenían valor.
 NO incluyas "campos_faltantes" en la respuesta.`,
     messages: [

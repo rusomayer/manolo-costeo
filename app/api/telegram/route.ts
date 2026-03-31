@@ -45,9 +45,8 @@ export async function POST(request: NextRequest) {
           textoRespuesta = await transcribirAudio(buffer);
         }
         if (textoRespuesta) {
-          const merged = await procesarRespuestaFollowUp(pendiente.gasto_data, textoRespuesta, pendiente.campo_esperado);
-          // Get timezone for this local
           const info = await obtenerLocalInfo(db, chatId);
+          const merged = await procesarRespuestaFollowUp(pendiente.gasto_data, textoRespuesta, pendiente.campo_esperado, info?.timezone);
           await guardarGasto(db, { ...merged, telegram_message_id: String(messageId) }, pendiente.local_id, info?.timezone);
           await eliminarGastoPendiente(db, pendiente.id);
           await enviarMensaje(chatId, formatearRespuesta(merged), messageId);
