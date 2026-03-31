@@ -19,7 +19,6 @@ interface TelegramLink {
 export default function ConfiguracionPage() {
   const [local, setLocal] = useState<LocalInfo | null>(null);
   const [telegramLink, setTelegramLink] = useState<TelegramLink | null>(null);
-  const [botUsername, setBotUsername] = useState('');
   const [tzSaved, setTzSaved] = useState(false);
 
   const supabase = createClient();
@@ -54,11 +53,8 @@ export default function ConfiguracionPage() {
 
   if (!local) return <div style={{ padding: 20 }}>Cargando...</div>;
 
-  const telegramDeepLink = botUsername
-    ? `https://t.me/${botUsername}?start=${local.telegram_code}`
-    : `t.me/TU_BOT?start=${local.telegram_code}`;
-
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(telegramDeepLink)}`;
+  const botUsername = process.env.NEXT_PUBLIC_BOT_USERNAME || 'manolocosteo_bot';
+  const telegramDeepLink = `https://t.me/${botUsername}?start=${local.telegram_code}`;
 
   return (
     <div style={{ maxWidth: 600, margin: '0 auto', padding: 20 }}>
@@ -109,68 +105,13 @@ export default function ConfiguracionPage() {
       </div>
 
       <div style={cardStyle}>
-        <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>Vincular Telegram</h3>
-        <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
-          Comparte este link o QR para que alguien vincule su chat de Telegram a este local.
-          Los gastos que manden por Telegram se guardaran aca.
-        </p>
-
-        <p style={labelStyle}>Username del bot (sin @)</p>
-        <input
-          type="text"
-          placeholder="ej: manolo_gastos_bot"
-          value={botUsername}
-          onChange={(e) => setBotUsername(e.target.value)}
-          style={inputStyle}
-        />
-
-        <p style={labelStyle}>Link de vinculacion</p>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16 }}>
-          <code style={{
-            flex: 1,
-            padding: '10px 12px',
-            background: 'var(--bg-tertiary)',
-            borderRadius: 'var(--radius-sm)',
-            fontSize: 12,
-            wordBreak: 'break-all',
-          }}>
-            {telegramDeepLink}
-          </code>
-          <button
-            onClick={() => navigator.clipboard.writeText(telegramDeepLink)}
-            style={btnStyle}
-          >
-            Copiar
-          </button>
-        </div>
-
-        <p style={labelStyle}>Codigo de vinculacion</p>
-        <code style={{
-          display: 'block',
-          padding: '10px 12px',
-          background: 'var(--bg-tertiary)',
-          borderRadius: 'var(--radius-sm)',
-          fontSize: 14,
-          fontWeight: 600,
-          letterSpacing: 2,
-          marginBottom: 16,
-        }}>
-          {local.telegram_code}
-        </code>
-
-        {botUsername && (
-          <div style={{ textAlign: 'center' }}>
-            <p style={labelStyle}>QR Code</p>
-            <img src={qrUrl} alt="QR Telegram" width={200} height={200} style={{ borderRadius: 8 }} />
-          </div>
-        )}
-
-        <div style={{ marginTop: 16, padding: '10px 14px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-sm)' }}>
+        <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>Telegram</h3>
+        <div style={{ padding: '10px 14px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-sm)' }}>
           <p style={{ fontSize: 12, fontWeight: 600 }}>Estado</p>
           <p style={{ fontSize: 13, color: telegramLink ? 'var(--success)' : 'var(--text-muted)', marginTop: 2 }}>
             {telegramLink
               ? `Vinculado (chat ${telegramLink.chat_id})`
-              : 'No vinculado aun'
+              : 'No vinculado aun — usa el boton "Agrega a Manolo" en el dashboard'
             }
           </p>
         </div>
