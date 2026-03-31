@@ -11,9 +11,8 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
-  const supabase = createClient();
-
   async function handleGoogleLogin() {
+    const supabase = createClient();
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -24,6 +23,7 @@ export default function LoginPage() {
   }
 
   async function handleEmailAuth(e: React.FormEvent) {
+    const supabase = createClient();
     e.preventDefault();
     setLoading(true);
     setError('');
@@ -62,7 +62,7 @@ export default function LoginPage() {
       <div style={styles.card}>
         <div style={styles.header}>
           <span style={{ fontSize: 48 }}>&#9749;</span>
-          <h1 style={styles.title}>Gastos del Cafe</h1>
+          <h1 style={styles.title}>Manolo Costeo</h1>
           <p style={styles.subtitle}>Registra y controla los gastos de tu local</p>
         </div>
 

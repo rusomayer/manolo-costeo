@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Gastos Café',
-  description: 'Dashboard de gastos de tu café',
+  title: 'Manolo Costeo',
+  description: 'Registra y controla los gastos de tu local',
 };
 
 export default function RootLayout({
