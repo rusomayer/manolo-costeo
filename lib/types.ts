@@ -7,6 +7,35 @@ export type Categoria =
   | 'mantenimiento'
   | 'otros';
 
+export interface Local {
+  id: string;
+  created_at: string;
+  nombre: string;
+  direccion?: string;
+  owner_id: string;
+  telegram_code: string;
+}
+
+export interface LocalMember {
+  id: string;
+  created_at: string;
+  local_id: string;
+  user_id: string;
+  rol: 'owner' | 'miembro';
+}
+
+export interface Invitation {
+  id: string;
+  created_at: string;
+  local_id: string;
+  codigo: string;
+  tipo: 'link' | 'email';
+  email?: string;
+  estado: 'pending' | 'accepted' | 'expired';
+  created_by: string;
+  expires_at: string;
+}
+
 export interface Gasto {
   id: string;
   created_at: string;
@@ -21,6 +50,7 @@ export interface Gasto {
   unidad?: string;
   telegram_message_id?: string;
   archivo_url?: string;
+  local_id?: string;
 }
 
 export interface GastoInput {

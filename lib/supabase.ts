@@ -1,13 +1,12 @@
-import { createClient } from '@supabase/supabase-js';
+import { SupabaseClient } from '@supabase/supabase-js';
 import { Gasto, GastoInput, ClaudeGastoResponse } from './types';
 
-const supabaseUrl = process.env.SUPABASE_URL!;
-const supabaseKey = process.env.SUPABASE_ANON_KEY!;
-
-export const supabase = createClient(supabaseUrl, supabaseKey);
-
-export async function guardarGasto(gasto: GastoInput & { telegram_message_id?: string }): Promise<Gasto> {
-  const { data, error } = await supabase
+export async function guardarGasto(
+  client: SupabaseClient,
+  gasto: GastoInput & { telegram_message_id?: string },
+  localId: string
+): Promise<Gasto> {
+  const { data, error } = await client
     .from('gastos')
     .insert([{
       descripcion: gasto.descripcion,
@@ -20,6 +19,7 @@ export async function guardarGasto(gasto: GastoInput & { telegram_message_id?: s
       cantidad: gasto.cantidad || null,
       unidad: gasto.unidad || null,
       telegram_message_id: gasto.telegram_message_id || null,
+      local_id: localId,
     }])
     .select()
     .single();
@@ -32,14 +32,19 @@ export async function guardarGasto(gasto: GastoInput & { telegram_message_id?: s
   return data;
 }
 
-export async function obtenerGastos(filtros?: {
-  desde?: string;
-  hasta?: string;
-  categoria?: string;
-}): Promise<Gasto[]> {
-  let query = supabase
+export async function obtenerGastos(
+  client: SupabaseClient,
+  localId: string,
+  filtros?: {
+    desde?: string;
+    hasta?: string;
+    categoria?: string;
+  }
+): Promise<Gasto[]> {
+  let query = client
     .from('gastos')
     .select('*')
+    .eq('local_id', localId)
     .order('fecha', { ascending: false });
 
   if (filtros?.desde) {
@@ -62,18 +67,22 @@ export async function obtenerGastos(filtros?: {
   return data || [];
 }
 
-export async function obtenerResumen(mes?: string): Promise<{
+export async function obtenerResumen(
+  client: SupabaseClient,
+  localId: string,
+  mes?: string
+): Promise<{
   total: number;
   porCategoria: Record<string, number>;
   cantidad: number;
 }> {
   const ahora = new Date();
   const mesActual = mes || `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}`;
-  
+
   const desde = `${mesActual}-01`;
   const hasta = `${mesActual}-31`;
 
-  const gastos = await obtenerGastos({ desde, hasta });
+  const gastos = await obtenerGastos(client, localId, { desde, hasta });
 
   const porCategoria: Record<string, number> = {};
   let total = 0;
@@ -92,19 +101,24 @@ export async function obtenerResumen(mes?: string): Promise<{
 
 // --- Gastos pendientes (follow-up questions) ---
 
-export async function guardarGastoPendiente(params: {
-  chatId: number;
-  botMessageId: number;
-  gastoData: ClaudeGastoResponse;
-  pregunta: string;
-  campoEsperado: string;
-}) {
-  const { error } = await supabase.from('gastos_pendientes').insert([{
+export async function guardarGastoPendiente(
+  client: SupabaseClient,
+  params: {
+    chatId: number;
+    botMessageId: number;
+    gastoData: ClaudeGastoResponse;
+    pregunta: string;
+    campoEsperado: string;
+    localId: string;
+  }
+) {
+  const { error } = await client.from('gastos_pendientes').insert([{
     chat_id: params.chatId,
     bot_message_id: params.botMessageId,
     gasto_data: params.gastoData,
     pregunta: params.pregunta,
     campo_esperado: params.campoEsperado,
+    local_id: params.localId,
   }]);
 
   if (error) {
@@ -113,8 +127,8 @@ export async function guardarGastoPendiente(params: {
   }
 }
 
-export async function buscarGastoPendiente(chatId: number, botMessageId: number) {
-  const { data, error } = await supabase
+export async function buscarGastoPendiente(client: SupabaseClient, chatId: number, botMessageId: number) {
+  const { data, error } = await client
     .from('gastos_pendientes')
     .select('*')
     .eq('chat_id', chatId)
@@ -130,11 +144,12 @@ export async function buscarGastoPendiente(chatId: number, botMessageId: number)
     id: string;
     gasto_data: ClaudeGastoResponse;
     campo_esperado: string;
+    local_id: string;
   } | null;
 }
 
-export async function buscarUltimoPendiente(chatId: number) {
-  const { data, error } = await supabase
+export async function buscarUltimoPendiente(client: SupabaseClient, chatId: number) {
+  const { data, error } = await client
     .from('gastos_pendientes')
     .select('*')
     .eq('chat_id', chatId)
@@ -144,22 +159,23 @@ export async function buscarUltimoPendiente(chatId: number) {
     .maybeSingle();
 
   if (error) {
-    console.error('Error buscando último pendiente:', error);
+    console.error('Error buscando ultimo pendiente:', error);
   }
 
   return data as {
     id: string;
     gasto_data: ClaudeGastoResponse;
     campo_esperado: string;
+    local_id: string;
   } | null;
 }
 
-export async function eliminarGastoPendiente(id: string) {
-  await supabase.from('gastos_pendientes').delete().eq('id', id);
+export async function eliminarGastoPendiente(client: SupabaseClient, id: string) {
+  await client.from('gastos_pendientes').delete().eq('id', id);
 }
 
-export async function limpiarPendientesExpirados() {
-  await supabase
+export async function limpiarPendientesExpirados(client: SupabaseClient) {
+  await client
     .from('gastos_pendientes')
     .delete()
     .lt('expires_at', new Date().toISOString());

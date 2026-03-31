@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { TelegramUpdate, TelegramMessage } from '@/lib/types';
+import { TelegramUpdate, TelegramMessage, ClaudeGastoResponse } from '@/lib/types';
 import { enviarMensaje, obtenerArchivo, formatearRespuesta, formatearError } from '@/lib/telegram';
 import { procesarTexto, procesarImagen, procesarPDF, transcribirAudio, procesarAudio, procesarRespuestaFollowUp } from '@/lib/claude';
 import { guardarGasto, guardarGastoPendiente, buscarGastoPendiente, buscarUltimoPendiente, eliminarGastoPendiente, limpiarPendientesExpirados } from '@/lib/supabase';
-import { ClaudeGastoResponse } from '@/lib/types';
+import { createServiceClient } from '@/lib/supabase/service';
 
 export async function POST(request: NextRequest) {
+  const db = createServiceClient();
+
   try {
     const update: TelegramUpdate = await request.json();
-    
-    // Solo procesamos mensajes (no ediciones, etc)
+
     if (!update.message) {
       return NextResponse.json({ ok: true });
     }
@@ -19,18 +20,15 @@ export async function POST(request: NextRequest) {
     const messageId = message.message_id;
 
     // Limpiar pendientes expirados
-    await limpiarPendientesExpirados();
+    await limpiarPendientesExpirados(db);
 
     // Verificar si es respuesta a una pregunta de follow-up
-    // 1. Por reply explícito al mensaje del bot
-    // 2. Por último pendiente del chat (si el mensaje es corto, probablemente es una respuesta)
     let pendiente = null;
     if (message.reply_to_message?.from?.is_bot) {
-      pendiente = await buscarGastoPendiente(chatId, message.reply_to_message.message_id);
+      pendiente = await buscarGastoPendiente(db, chatId, message.reply_to_message.message_id);
     }
     if (!pendiente && (message.text || message.voice)) {
-      // Si hay un pendiente reciente y el mensaje parece una respuesta corta
-      const ultimo = await buscarUltimoPendiente(chatId);
+      const ultimo = await buscarUltimoPendiente(db, chatId);
       if (ultimo && message.text && message.text.length < 50) {
         pendiente = ultimo;
       } else if (ultimo && message.voice) {
@@ -41,7 +39,6 @@ export async function POST(request: NextRequest) {
     if (pendiente) {
       try {
         let textoRespuesta = message.text;
-        // Si respondió con audio, transcribirlo
         if (!textoRespuesta && message.voice) {
           const { buffer } = await obtenerArchivo(message.voice.file_id);
           textoRespuesta = await transcribirAudio(buffer);
@@ -52,8 +49,8 @@ export async function POST(request: NextRequest) {
             textoRespuesta,
             pendiente.campo_esperado
           );
-          await guardarGasto({ ...merged, telegram_message_id: String(messageId) });
-          await eliminarGastoPendiente(pendiente.id);
+          await guardarGasto(db, { ...merged, telegram_message_id: String(messageId) }, pendiente.local_id);
+          await eliminarGastoPendiente(db, pendiente.id);
           await enviarMensaje(chatId, formatearRespuesta(merged), messageId);
           return NextResponse.json({ ok: true });
         }
@@ -66,19 +63,18 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      // Procesar según el tipo de mensaje
       if (message.photo && message.photo.length > 0) {
-        await procesarFoto(message, chatId, messageId);
+        await procesarFoto(db, message, chatId, messageId);
       } else if (message.document) {
-        await procesarDocumento(message, chatId, messageId);
+        await procesarDocumento(db, message, chatId, messageId);
       } else if (message.voice) {
-        await procesarVoz(message, chatId, messageId);
+        await procesarVoz(db, message, chatId, messageId);
       } else if (message.text) {
-        await procesarMensajeTexto(message, chatId, messageId);
+        await procesarMensajeTexto(db, message, chatId, messageId);
       } else {
         await enviarMensaje(
           chatId,
-          '🤔 No entendí ese tipo de mensaje. Podés mandarme:\n\n• Texto con el gasto\n• Foto de una factura\n• PDF de una factura\n• Audio describiendo el gasto',
+          '🤔 No entendi ese tipo de mensaje. Podes mandarme:\n\n- Texto con el gasto\n- Foto de una factura\n- PDF de una factura\n- Audio describiendo el gasto',
           messageId
         );
       }
@@ -95,20 +91,55 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function procesarMensajeTexto(message: TelegramMessage, chatId: number, messageId: number) {
+// Buscar el local_id vinculado a este chat
+async function obtenerLocalId(db: ReturnType<typeof createServiceClient>, chatId: number): Promise<string | null> {
+  const { data } = await db
+    .from('telegram_links')
+    .select('local_id')
+    .eq('chat_id', chatId)
+    .single();
+  return data?.local_id || null;
+}
+
+async function procesarMensajeTexto(
+  db: ReturnType<typeof createServiceClient>,
+  message: TelegramMessage,
+  chatId: number,
+  messageId: number
+) {
   const texto = message.text!;
-  
-  // Comandos especiales
-  if (texto === '/start') {
+
+  // /start con codigo de local
+  if (texto.startsWith('/start')) {
+    const code = texto.split(' ')[1];
+    if (code) {
+      const { data: local } = await db
+        .from('locales')
+        .select('id, nombre')
+        .eq('telegram_code', code)
+        .single();
+
+      if (local) {
+        await db
+          .from('telegram_links')
+          .upsert({ chat_id: chatId, local_id: local.id }, { onConflict: 'chat_id' });
+        await enviarMensaje(
+          chatId,
+          `✅ <b>Vinculado a "${local.nombre}"</b>\n\nTodos los gastos que mandes desde este chat se guardan ahi.`,
+          messageId
+        );
+      } else {
+        await enviarMensaje(chatId, '❌ Codigo invalido. Revisa el link de vinculacion.', messageId);
+      }
+      return;
+    }
+
+    // /start sin codigo
     await enviarMensaje(
       chatId,
-      '☕ <b>¡Hola! Soy tu bot de gastos.</b>\n\n' +
-      'Mandame tus gastos de cualquier forma:\n\n' +
-      '📝 <b>Texto:</b> "Compré café 5kg a $45.000"\n' +
-      '📸 <b>Foto:</b> De una factura o ticket\n' +
-      '📄 <b>PDF:</b> Facturas digitales\n' +
-      '🎤 <b>Audio:</b> Dictá el gasto\n\n' +
-      'Yo me encargo de extraer los datos y guardarlos.',
+      '☕ <b>Hola! Soy tu bot de gastos.</b>\n\n' +
+      'Para empezar, necesitas vincular este chat a un local.\n' +
+      'Usa el link de vinculacion que encontras en la configuracion del dashboard.',
       messageId
     );
     return;
@@ -117,19 +148,26 @@ async function procesarMensajeTexto(message: TelegramMessage, chatId: number, me
   if (texto === '/ayuda' || texto === '/help') {
     await enviarMensaje(
       chatId,
-      '📖 <b>Cómo usar el bot</b>\n\n' +
+      '📖 <b>Como usar el bot</b>\n\n' +
       '<b>Registrar gastos:</b>\n' +
-      '• Escribí el gasto: "Leche 20L $18.000"\n' +
-      '• Mandá foto de factura\n' +
-      '• Mandá PDF de factura\n\n' +
-      '<b>Categorías:</b>\n' +
-      '☕ Insumos\n' +
-      '💡 Servicios\n' +
-      '👤 Sueldos\n' +
-      '🏠 Alquiler\n' +
-      '📋 Impuestos\n' +
-      '🔧 Mantenimiento\n' +
-      '📦 Otros',
+      '- Escribi el gasto: "Leche 20L $18.000"\n' +
+      '- Manda foto de factura\n' +
+      '- Manda PDF de factura\n' +
+      '- Graba un audio\n\n' +
+      '<b>Categorias:</b>\n' +
+      '☕ Insumos | 💡 Servicios | 👤 Sueldos\n' +
+      '🏠 Alquiler | 📋 Impuestos | 🔧 Mantenimiento | 📦 Otros',
+      messageId
+    );
+    return;
+  }
+
+  // Verificar vinculacion
+  const localId = await obtenerLocalId(db, chatId);
+  if (!localId) {
+    await enviarMensaje(
+      chatId,
+      '⚠️ Este chat no esta vinculado a ningun local.\n\nUsa el link de vinculacion desde el dashboard (Configuracion > Telegram).',
       messageId
     );
     return;
@@ -137,98 +175,104 @@ async function procesarMensajeTexto(message: TelegramMessage, chatId: number, me
 
   // Procesar como gasto
   const resultado = await procesarTexto(texto);
-  
+
   if (resultado.monto === 0 || resultado.confianza === 'baja') {
     await enviarMensaje(
       chatId,
       '🤔 No estoy seguro de entender el gasto.\n\n' +
-      'Probá con algo como:\n' +
-      '• "Café 5kg $45.000"\n' +
-      '• "Pagué la luz $28.500"\n' +
-      '• "Sueldo Juan $150.000"',
+      'Proba con algo como:\n' +
+      '- "Cafe 5kg $45.000"\n' +
+      '- "Pague la luz $28.500"\n' +
+      '- "Sueldo Juan $150.000"',
       messageId
     );
     return;
   }
 
-  // Preguntar si falta info antes de guardar
-  if (await preguntarSiFalta(resultado, chatId, messageId)) return;
+  if (await preguntarSiFalta(db, resultado, chatId, messageId, localId)) return;
 
-  await guardarGasto({
-    ...resultado,
-    telegram_message_id: String(messageId),
-  });
-
+  await guardarGasto(db, { ...resultado, telegram_message_id: String(messageId) }, localId);
   await enviarMensaje(chatId, formatearRespuesta(resultado), messageId);
 }
 
-async function procesarFoto(message: TelegramMessage, chatId: number, messageId: number) {
-  // Telegram envía varias resoluciones, tomamos la más grande
+async function procesarFoto(
+  db: ReturnType<typeof createServiceClient>,
+  message: TelegramMessage,
+  chatId: number,
+  messageId: number
+) {
+  const localId = await obtenerLocalId(db, chatId);
+  if (!localId) {
+    await enviarMensaje(chatId, '⚠️ Este chat no esta vinculado a ningun local.', messageId);
+    return;
+  }
+
   const fotos = message.photo!;
   const fotoGrande = fotos[fotos.length - 1];
-  
+
   await enviarMensaje(chatId, '📸 Analizando la imagen...', messageId);
-  
+
   const { buffer } = await obtenerArchivo(fotoGrande.file_id);
   const resultado = await procesarImagen(buffer, 'image/jpeg', message.caption);
-  
+
   if (resultado.monto === 0) {
-    await enviarMensaje(
-      chatId,
-      '🤔 No pude leer bien la factura. ¿Podés mandarla con mejor luz o escribir el monto?',
-      messageId
-    );
+    await enviarMensaje(chatId, '🤔 No pude leer bien la factura. Podes mandarla con mejor luz o escribir el monto?', messageId);
     return;
   }
 
-  if (await preguntarSiFalta(resultado, chatId, messageId)) return;
+  if (await preguntarSiFalta(db, resultado, chatId, messageId, localId)) return;
 
-  await guardarGasto({
-    ...resultado,
-    telegram_message_id: String(messageId),
-  });
-
+  await guardarGasto(db, { ...resultado, telegram_message_id: String(messageId) }, localId);
   await enviarMensaje(chatId, formatearRespuesta(resultado), messageId);
 }
 
-async function procesarDocumento(message: TelegramMessage, chatId: number, messageId: number) {
+async function procesarDocumento(
+  db: ReturnType<typeof createServiceClient>,
+  message: TelegramMessage,
+  chatId: number,
+  messageId: number
+) {
   const doc = message.document!;
-  
-  // Solo PDFs por ahora
+
   if (doc.mime_type !== 'application/pdf') {
-    await enviarMensaje(
-      chatId,
-      '📄 Por ahora solo proceso PDFs. Probá mandando una foto o escribiendo el gasto.',
-      messageId
-    );
+    await enviarMensaje(chatId, '📄 Por ahora solo proceso PDFs. Proba mandando una foto o escribiendo el gasto.', messageId);
+    return;
+  }
+
+  const localId = await obtenerLocalId(db, chatId);
+  if (!localId) {
+    await enviarMensaje(chatId, '⚠️ Este chat no esta vinculado a ningun local.', messageId);
     return;
   }
 
   await enviarMensaje(chatId, '📄 Analizando el PDF...', messageId);
-  
+
   const { buffer } = await obtenerArchivo(doc.file_id);
   const resultado = await procesarPDF(buffer, doc.file_name);
-  
+
   if (resultado.monto === 0) {
-    await enviarMensaje(
-      chatId,
-      '🤔 No pude extraer datos del PDF. ¿Podés escribir el monto manualmente?',
-      messageId
-    );
+    await enviarMensaje(chatId, '🤔 No pude extraer datos del PDF. Podes escribir el monto manualmente?', messageId);
     return;
   }
 
-  if (await preguntarSiFalta(resultado, chatId, messageId)) return;
+  if (await preguntarSiFalta(db, resultado, chatId, messageId, localId)) return;
 
-  await guardarGasto({
-    ...resultado,
-    telegram_message_id: String(messageId),
-  });
-
+  await guardarGasto(db, { ...resultado, telegram_message_id: String(messageId) }, localId);
   await enviarMensaje(chatId, formatearRespuesta(resultado), messageId);
 }
 
-async function procesarVoz(message: TelegramMessage, chatId: number, messageId: number) {
+async function procesarVoz(
+  db: ReturnType<typeof createServiceClient>,
+  message: TelegramMessage,
+  chatId: number,
+  messageId: number
+) {
+  const localId = await obtenerLocalId(db, chatId);
+  if (!localId) {
+    await enviarMensaje(chatId, '⚠️ Este chat no esta vinculado a ningun local.', messageId);
+    return;
+  }
+
   await enviarMensaje(chatId, '🎤 Transcribiendo audio...', messageId);
 
   const { buffer } = await obtenerArchivo(message.voice!.file_id);
@@ -238,49 +282,43 @@ async function procesarVoz(message: TelegramMessage, chatId: number, messageId: 
   if (resultado.monto === 0 || resultado.confianza === 'baja') {
     await enviarMensaje(
       chatId,
-      `🎤 Escuché: "<i>${transcripcion}</i>"\n\n🤔 No pude identificar un gasto claro. ¿Podés repetirlo o escribirlo?`,
+      `🎤 Escuche: "<i>${transcripcion}</i>"\n\n🤔 No pude identificar un gasto claro. Podes repetirlo o escribirlo?`,
       messageId
     );
     return;
   }
 
-  if (await preguntarSiFalta(resultado, chatId, messageId)) return;
+  if (await preguntarSiFalta(db, resultado, chatId, messageId, localId)) return;
 
-  await guardarGasto({
-    ...resultado,
-    telegram_message_id: String(messageId),
-  });
-
-  await enviarMensaje(
-    chatId,
-    `🎤 Escuché: "<i>${transcripcion}</i>"\n\n${formatearRespuesta(resultado)}`,
-    messageId
-  );
+  await guardarGasto(db, { ...resultado, telegram_message_id: String(messageId) }, localId);
+  await enviarMensaje(chatId, `🎤 Escuche: "<i>${transcripcion}</i>"\n\n${formatearRespuesta(resultado)}`, messageId);
 }
 
 async function preguntarSiFalta(
+  db: ReturnType<typeof createServiceClient>,
   resultado: ClaudeGastoResponse,
   chatId: number,
-  messageId: number
+  messageId: number,
+  localId: string
 ): Promise<boolean> {
   if (!resultado.campos_faltantes?.length) return false;
 
   const faltante = resultado.campos_faltantes[0];
   const sentMsg = await enviarMensaje(chatId, faltante.pregunta, messageId, true);
-  await guardarGastoPendiente({
+  await guardarGastoPendiente(db, {
     chatId,
     botMessageId: sentMsg.result.message_id,
     gastoData: resultado,
     pregunta: faltante.pregunta,
     campoEsperado: faltante.campo,
+    localId,
   });
   return true;
 }
 
-// Verificación del webhook (GET request de Telegram)
 export async function GET() {
-  return NextResponse.json({ 
+  return NextResponse.json({
     status: 'Bot activo',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
 }

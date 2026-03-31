@@ -1,0 +1,146 @@
+import { createClient } from '@/lib/supabase/server';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+import { signOut, seleccionarLocal } from '@/lib/actions';
+import { Local } from '@/lib/types';
+
+export default async function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) redirect('/');
+
+  // Get user's locales via local_members
+  const { data: memberships } = await supabase
+    .from('local_members')
+    .select('local_id, rol, locales(*)')
+    .eq('user_id', user.id);
+
+  const locales: (Local & { rol: string })[] = (memberships || []).map((m: any) => ({
+    ...m.locales,
+    rol: m.rol,
+  }));
+
+  // No locales -> create first one
+  if (locales.length === 0) {
+    redirect('/crear-local');
+  }
+
+  // Get selected local from cookie
+  const cookieStore = await cookies();
+  const selectedLocalId = cookieStore.get('selected_local')?.value;
+  const selectedLocal = locales.find((l) => l.id === selectedLocalId) || locales[0];
+
+  // If no cookie or invalid, set the first one
+  if (selectedLocal.id !== selectedLocalId) {
+    cookieStore.set('selected_local', selectedLocal.id, { path: '/', maxAge: 60 * 60 * 24 * 365 });
+  }
+
+  return (
+    <div>
+      <header style={headerStyles.header}>
+        <div style={headerStyles.left}>
+          <span style={{ fontSize: 24 }}>&#9749;</span>
+          <div>
+            <h1 style={headerStyles.title}>{selectedLocal.nombre}</h1>
+            {locales.length > 1 && (
+              <form style={{ marginTop: 4 }}>
+                <select
+                  style={headerStyles.select}
+                  defaultValue={selectedLocal.id}
+                  onChange={undefined}
+                  name="localId"
+                >
+                  {locales.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.nombre}
+                    </option>
+                  ))}
+                </select>
+              </form>
+            )}
+          </div>
+        </div>
+        <div style={headerStyles.right}>
+          <a href="/dashboard/configuracion" style={headerStyles.link}>Config</a>
+          <a href="/dashboard/invitar" style={headerStyles.link}>Invitar</a>
+          <span style={headerStyles.email}>{user.email}</span>
+          <form action={signOut}>
+            <button type="submit" style={headerStyles.logoutBtn}>Salir</button>
+          </form>
+        </div>
+      </header>
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `
+            document.querySelector('select[name="localId"]')?.addEventListener('change', async function(e) {
+              const form = new FormData();
+              form.append('localId', e.target.value);
+              document.cookie = 'selected_local=' + e.target.value + ';path=/;max-age=31536000';
+              window.location.reload();
+            });
+          `,
+        }}
+      />
+      {children}
+    </div>
+  );
+}
+
+const headerStyles: Record<string, React.CSSProperties> = {
+  header: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '12px 20px',
+    background: 'var(--bg-primary)',
+    borderBottom: '1px solid var(--border)',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  left: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+  },
+  title: {
+    fontSize: 16,
+    fontWeight: 700,
+    color: 'var(--text-primary)',
+  },
+  select: {
+    fontSize: 12,
+    padding: '2px 6px',
+    border: '1px solid var(--border)',
+    borderRadius: 4,
+    background: 'var(--bg-secondary)',
+    color: 'var(--text-primary)',
+  },
+  right: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+  },
+  link: {
+    fontSize: 13,
+    color: 'var(--accent)',
+    textDecoration: 'none',
+  },
+  email: {
+    fontSize: 12,
+    color: 'var(--text-muted)',
+  },
+  logoutBtn: {
+    fontSize: 13,
+    padding: '6px 12px',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius-sm)',
+    background: 'var(--bg-primary)',
+    color: 'var(--text-secondary)',
+    cursor: 'pointer',
+  },
+};
