@@ -5,8 +5,14 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const SYSTEM_PROMPT = `Sos un asistente que ayuda a registrar gastos de un café/bar.
+function getSystemPrompt(timezone?: string) {
+  const tz = timezone || 'America/Buenos_Aires';
+  const hoy = new Date().toLocaleDateString('en-CA', { timeZone: tz });
+  const diaSemana = new Date().toLocaleDateString('es-AR', { timeZone: tz, weekday: 'long' });
+  return `Sos un asistente que ayuda a registrar gastos de un café/bar.
 Tu trabajo es extraer información de gastos de mensajes de texto, fotos de facturas, o transcripciones de audio.
+
+HOY es ${diaSemana} ${hoy}. Usa esta fecha para interpretar referencias como "ayer", "el lunes", "la semana pasada", etc.
 
 CATEGORÍAS VÁLIDAS:
 - insumos: café, leche, azúcar, medialunas, ingredientes, etc.
@@ -61,12 +67,13 @@ Si no falta nada relevante, NO incluir campos_faltantes.
 
 Formato del campo:
 "campos_faltantes": [{"campo": "cantidad_unidad", "pregunta": "¿Cuántos kg/litros/unidades compraste?"}]`;
+}
 
-export async function procesarTexto(texto: string): Promise<ClaudeGastoResponse> {
+export async function procesarTexto(texto: string, timezone?: string): Promise<ClaudeGastoResponse> {
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-20250514',
     max_tokens: 500,
-    system: SYSTEM_PROMPT,
+    system: getSystemPrompt(timezone),
     messages: [
       {
         role: 'user',
@@ -90,14 +97,14 @@ export async function procesarTexto(texto: string): Promise<ClaudeGastoResponse>
   }
 }
 
-export async function procesarImagen(imageBuffer: Buffer, mimeType: string, caption?: string): Promise<ClaudeGastoResponse> {
+export async function procesarImagen(imageBuffer: Buffer, mimeType: string, caption?: string, timezone?: string): Promise<ClaudeGastoResponse> {
   const base64 = imageBuffer.toString('base64');
   const mediaType = mimeType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
 
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-20250514',
     max_tokens: 500,
-    system: SYSTEM_PROMPT,
+    system: getSystemPrompt(timezone),
     messages: [
       {
         role: 'user',
@@ -135,13 +142,13 @@ export async function procesarImagen(imageBuffer: Buffer, mimeType: string, capt
   }
 }
 
-export async function procesarPDF(pdfBuffer: Buffer, filename?: string): Promise<ClaudeGastoResponse> {
+export async function procesarPDF(pdfBuffer: Buffer, filename?: string, timezone?: string): Promise<ClaudeGastoResponse> {
   const base64 = pdfBuffer.toString('base64');
 
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-20250514',
     max_tokens: 500,
-    system: SYSTEM_PROMPT,
+    system: getSystemPrompt(timezone),
     messages: [
       {
         role: 'user',
@@ -177,10 +184,8 @@ export async function procesarPDF(pdfBuffer: Buffer, filename?: string): Promise
   }
 }
 
-export async function procesarAudio(transcripcion: string): Promise<ClaudeGastoResponse> {
-  // Por ahora usamos el texto directamente
-  // En producción podrías usar Whisper para transcribir
-  return procesarTexto(transcripcion);
+export async function procesarAudio(transcripcion: string, timezone?: string): Promise<ClaudeGastoResponse> {
+  return procesarTexto(transcripcion, timezone);
 }
 
 export async function procesarRespuestaFollowUp(

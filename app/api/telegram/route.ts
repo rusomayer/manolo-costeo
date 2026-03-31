@@ -134,7 +134,7 @@ async function procesarMensajeTexto(db: DB, message: TelegramMessage, chatId: nu
     return;
   }
 
-  const resultado = await procesarTexto(texto);
+  const resultado = await procesarTexto(texto, info.timezone);
 
   if (resultado.monto === 0 || resultado.confianza === 'baja') {
     await enviarMensaje(chatId, '🤔 No estoy seguro de entender el gasto.\n\nProba con algo como:\n- "Cafe 5kg $45.000"\n- "Pague la luz $28.500"\n- "Sueldo Juan $150.000"', messageId);
@@ -159,7 +159,7 @@ async function procesarFoto(db: DB, message: TelegramMessage, chatId: number, me
   await enviarMensaje(chatId, '📸 Analizando la imagen...', messageId);
 
   const { buffer } = await obtenerArchivo(fotoGrande.file_id);
-  const resultado = await procesarImagen(buffer, 'image/jpeg', message.caption);
+  const resultado = await procesarImagen(buffer, 'image/jpeg', message.caption, info.timezone);
 
   if (resultado.monto === 0) {
     await enviarMensaje(chatId, '🤔 No pude leer bien la factura. Podes mandarla con mejor luz o escribir el monto?', messageId);
@@ -188,7 +188,7 @@ async function procesarDocumento(db: DB, message: TelegramMessage, chatId: numbe
   await enviarMensaje(chatId, '📄 Analizando el PDF...', messageId);
 
   const { buffer } = await obtenerArchivo(doc.file_id);
-  const resultado = await procesarPDF(buffer, doc.file_name);
+  const resultado = await procesarPDF(buffer, doc.file_name, info.timezone);
 
   if (resultado.monto === 0) {
     await enviarMensaje(chatId, '🤔 No pude extraer datos del PDF. Podes escribir el monto manualmente?', messageId);
@@ -212,7 +212,7 @@ async function procesarVoz(db: DB, message: TelegramMessage, chatId: number, mes
 
   const { buffer } = await obtenerArchivo(message.voice!.file_id);
   const transcripcion = await transcribirAudio(buffer);
-  const resultado = await procesarAudio(transcripcion);
+  const resultado = await procesarAudio(transcripcion, info.timezone);
 
   if (resultado.monto === 0 || resultado.confianza === 'baja') {
     await enviarMensaje(chatId, `🎤 Escuche: "<i>${transcripcion}</i>"\n\n🤔 No pude identificar un gasto claro. Podes repetirlo o escribirlo?`, messageId);
