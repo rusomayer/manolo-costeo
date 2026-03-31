@@ -1,6 +1,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { createServiceClient } from '@/lib/supabase/service';
 import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 
@@ -13,7 +14,9 @@ export async function crearLocal(formData: FormData) {
   const nombre = formData.get('nombre') as string;
   const direccion = formData.get('direccion') as string;
 
-  const { data, error } = await supabase
+  // Use service client to bypass RLS (user is validated above)
+  const db = createServiceClient();
+  const { data, error } = await db
     .from('locales')
     .insert([{ nombre, direccion, owner_id: user.id }])
     .select()
@@ -40,7 +43,8 @@ export async function crearInvitacion(localId: string, tipo: 'link' | 'email', e
 
   if (!user) throw new Error('No autenticado');
 
-  const { data, error } = await supabase
+  const db = createServiceClient();
+  const { data, error } = await db
     .from('invitations')
     .insert([{
       local_id: localId,
@@ -62,8 +66,10 @@ export async function aceptarInvitacion(codigo: string) {
 
   if (!user) throw new Error('No autenticado');
 
+  const db = createServiceClient();
+
   // Find invitation
-  const { data: invitation, error: findError } = await supabase
+  const { data: invitation, error: findError } = await db
     .from('invitations')
     .select('*')
     .eq('codigo', codigo)
@@ -74,7 +80,7 @@ export async function aceptarInvitacion(codigo: string) {
   if (findError || !invitation) throw new Error('Invitacion invalida o expirada');
 
   // Add user as member
-  const { error: memberError } = await supabase
+  const { error: memberError } = await db
     .from('local_members')
     .insert([{
       local_id: invitation.local_id,
@@ -83,12 +89,11 @@ export async function aceptarInvitacion(codigo: string) {
     }]);
 
   if (memberError && memberError.code !== '23505') {
-    // 23505 = unique violation (already a member)
     throw new Error(memberError.message);
   }
 
   // Mark invitation as accepted
-  await supabase
+  await db
     .from('invitations')
     .update({ estado: 'accepted' })
     .eq('id', invitation.id);
