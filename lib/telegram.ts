@@ -64,6 +64,7 @@ export function formatearRespuesta(gasto: {
   confianza?: string;
   cantidad?: number;
   unidad?: string;
+  fecha?: string;
 }): string {
   const monto = new Intl.NumberFormat('es-AR', {
     style: 'currency',
@@ -87,6 +88,12 @@ export function formatearRespuesta(gasto: {
   respuesta += `${emoji} ${gasto.descripcion}\n`;
   respuesta += `💰 ${monto}\n`;
   respuesta += `📁 ${gasto.categoria.charAt(0).toUpperCase() + gasto.categoria.slice(1)}`;
+
+  if (gasto.fecha) {
+    const [y, m, d] = gasto.fecha.split('-').map(Number);
+    const fechaStr = new Date(y, m - 1, d).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' });
+    respuesta += `\n📅 ${fechaStr}`;
+  }
   
   if (gasto.cantidad && gasto.unidad) {
     respuesta += `\n📦 ${gasto.cantidad} ${gasto.unidad}`;
