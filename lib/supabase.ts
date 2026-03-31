@@ -133,6 +133,27 @@ export async function buscarGastoPendiente(chatId: number, botMessageId: number)
   } | null;
 }
 
+export async function buscarUltimoPendiente(chatId: number) {
+  const { data, error } = await supabase
+    .from('gastos_pendientes')
+    .select('*')
+    .eq('chat_id', chatId)
+    .gt('expires_at', new Date().toISOString())
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error('Error buscando último pendiente:', error);
+  }
+
+  return data as {
+    id: string;
+    gasto_data: ClaudeGastoResponse;
+    campo_esperado: string;
+  } | null;
+}
+
 export async function eliminarGastoPendiente(id: string) {
   await supabase.from('gastos_pendientes').delete().eq('id', id);
 }

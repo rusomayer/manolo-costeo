@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { TelegramUpdate, TelegramMessage } from '@/lib/types';
 import { enviarMensaje, obtenerArchivo, formatearRespuesta, formatearError } from '@/lib/telegram';
 import { procesarTexto, procesarImagen, procesarPDF, transcribirAudio, procesarAudio, procesarRespuestaFollowUp } from '@/lib/claude';
-import { guardarGasto, guardarGastoPendiente, buscarGastoPendiente, eliminarGastoPendiente, limpiarPendientesExpirados } from '@/lib/supabase';
+import { guardarGasto, guardarGastoPendiente, buscarGastoPendiente, buscarUltimoPendiente, eliminarGastoPendiente, limpiarPendientesExpirados } from '@/lib/supabase';
 import { ClaudeGastoResponse } from '@/lib/types';
 
 export async function POST(request: NextRequest) {
@@ -22,23 +22,45 @@ export async function POST(request: NextRequest) {
     await limpiarPendientesExpirados();
 
     // Verificar si es respuesta a una pregunta de follow-up
-    if (message.reply_to_message?.from?.is_bot && message.text) {
-      const pendiente = await buscarGastoPendiente(chatId, message.reply_to_message.message_id);
-      if (pendiente) {
-        try {
+    // 1. Por reply explícito al mensaje del bot
+    // 2. Por último pendiente del chat (si el mensaje es corto, probablemente es una respuesta)
+    let pendiente = null;
+    if (message.reply_to_message?.from?.is_bot) {
+      pendiente = await buscarGastoPendiente(chatId, message.reply_to_message.message_id);
+    }
+    if (!pendiente && (message.text || message.voice)) {
+      // Si hay un pendiente reciente y el mensaje parece una respuesta corta
+      const ultimo = await buscarUltimoPendiente(chatId);
+      if (ultimo && message.text && message.text.length < 50) {
+        pendiente = ultimo;
+      } else if (ultimo && message.voice) {
+        pendiente = ultimo;
+      }
+    }
+
+    if (pendiente) {
+      try {
+        let textoRespuesta = message.text;
+        // Si respondió con audio, transcribirlo
+        if (!textoRespuesta && message.voice) {
+          const { buffer } = await obtenerArchivo(message.voice.file_id);
+          textoRespuesta = await transcribirAudio(buffer);
+        }
+        if (textoRespuesta) {
           const merged = await procesarRespuestaFollowUp(
             pendiente.gasto_data,
-            message.text,
+            textoRespuesta,
             pendiente.campo_esperado
           );
           await guardarGasto({ ...merged, telegram_message_id: String(messageId) });
           await eliminarGastoPendiente(pendiente.id);
           await enviarMensaje(chatId, formatearRespuesta(merged), messageId);
-        } catch (error) {
-          console.error('Error procesando follow-up:', error);
-          const errorMsg = error instanceof Error ? error.message : 'Error desconocido';
-          await enviarMensaje(chatId, formatearError(errorMsg), messageId);
+          return NextResponse.json({ ok: true });
         }
+      } catch (error) {
+        console.error('Error procesando follow-up:', error);
+        const errorMsg = error instanceof Error ? error.message : 'Error desconocido';
+        await enviarMensaje(chatId, formatearError(errorMsg), messageId);
         return NextResponse.json({ ok: true });
       }
     }
