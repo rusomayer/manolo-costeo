@@ -87,7 +87,8 @@ export default function Dashboard() {
       }))
     : [];
 
-  const nombreMes = new Date(mesActual + '-01').toLocaleDateString('es-AR', {
+  const [anio, mes] = mesActual.split('-').map(Number);
+  const nombreMes = new Date(anio, mes - 1).toLocaleDateString('es-AR', {
     month: 'long',
     year: 'numeric',
   });

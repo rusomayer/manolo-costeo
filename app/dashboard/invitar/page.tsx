@@ -86,7 +86,10 @@ export default function InvitarPage() {
 
   return (
     <div style={{ maxWidth: 600, margin: '0 auto', padding: 20 }}>
-      <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 20 }}>Invitar al local</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <h2 style={{ fontSize: 20, fontWeight: 700 }}>Invitar al local</h2>
+        <a href="/dashboard" style={{ fontSize: 13, color: 'var(--accent)', textDecoration: 'none' }}>Volver al dashboard</a>
+      </div>
 
       <div style={cardStyle}>
         <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>Generar link de invitacion</h3>

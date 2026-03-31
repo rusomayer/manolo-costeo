@@ -1,10 +1,15 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { Gasto, GastoInput, ClaudeGastoResponse } from './types';
 
+function fechaLocal(timezone: string): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: timezone });
+}
+
 export async function guardarGasto(
   client: SupabaseClient,
   gasto: GastoInput & { telegram_message_id?: string },
-  localId: string
+  localId: string,
+  timezone?: string
 ): Promise<Gasto> {
   const { data, error } = await client
     .from('gastos')
@@ -15,7 +20,7 @@ export async function guardarGasto(
       proveedor: gasto.proveedor || null,
       metodo_pago: gasto.metodo_pago || 'efectivo',
       notas: gasto.notas || null,
-      fecha: gasto.fecha || new Date().toISOString().split('T')[0],
+      fecha: gasto.fecha || fechaLocal(timezone || 'America/Buenos_Aires'),
       cantidad: gasto.cantidad || null,
       unidad: gasto.unidad || null,
       telegram_message_id: gasto.telegram_message_id || null,

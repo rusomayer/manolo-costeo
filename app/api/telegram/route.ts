@@ -5,6 +5,8 @@ import { procesarTexto, procesarImagen, procesarPDF, transcribirAudio, procesarA
 import { guardarGasto, guardarGastoPendiente, buscarGastoPendiente, buscarUltimoPendiente, eliminarGastoPendiente, limpiarPendientesExpirados } from '@/lib/supabase';
 import { createServiceClient } from '@/lib/supabase/service';
 
+type DB = ReturnType<typeof createServiceClient>;
+
 export async function POST(request: NextRequest) {
   const db = createServiceClient();
 
@@ -19,10 +21,9 @@ export async function POST(request: NextRequest) {
     const chatId = message.chat.id;
     const messageId = message.message_id;
 
-    // Limpiar pendientes expirados
     await limpiarPendientesExpirados(db);
 
-    // Verificar si es respuesta a una pregunta de follow-up
+    // Follow-up detection
     let pendiente = null;
     if (message.reply_to_message?.from?.is_bot) {
       pendiente = await buscarGastoPendiente(db, chatId, message.reply_to_message.message_id);
@@ -44,12 +45,10 @@ export async function POST(request: NextRequest) {
           textoRespuesta = await transcribirAudio(buffer);
         }
         if (textoRespuesta) {
-          const merged = await procesarRespuestaFollowUp(
-            pendiente.gasto_data,
-            textoRespuesta,
-            pendiente.campo_esperado
-          );
-          await guardarGasto(db, { ...merged, telegram_message_id: String(messageId) }, pendiente.local_id);
+          const merged = await procesarRespuestaFollowUp(pendiente.gasto_data, textoRespuesta, pendiente.campo_esperado);
+          // Get timezone for this local
+          const info = await obtenerLocalInfo(db, chatId);
+          await guardarGasto(db, { ...merged, telegram_message_id: String(messageId) }, pendiente.local_id, info?.timezone);
           await eliminarGastoPendiente(db, pendiente.id);
           await enviarMensaje(chatId, formatearRespuesta(merged), messageId);
           return NextResponse.json({ ok: true });
@@ -72,11 +71,7 @@ export async function POST(request: NextRequest) {
       } else if (message.text) {
         await procesarMensajeTexto(db, message, chatId, messageId);
       } else {
-        await enviarMensaje(
-          chatId,
-          '🤔 No entendi ese tipo de mensaje. Podes mandarme:\n\n- Texto con el gasto\n- Foto de una factura\n- PDF de una factura\n- Audio describiendo el gasto',
-          messageId
-        );
+        await enviarMensaje(chatId, '🤔 No entendi ese tipo de mensaje. Podes mandarme:\n\n- Texto con el gasto\n- Foto de una factura\n- PDF de una factura\n- Audio describiendo el gasto', messageId);
       }
     } catch (error) {
       console.error('Error procesando mensaje:', error);
@@ -91,125 +86,76 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Buscar el local_id vinculado a este chat
-async function obtenerLocalId(db: ReturnType<typeof createServiceClient>, chatId: number): Promise<string | null> {
+async function obtenerLocalInfo(db: DB, chatId: number): Promise<{ localId: string; timezone: string } | null> {
   const { data } = await db
     .from('telegram_links')
-    .select('local_id')
+    .select('local_id, locales(timezone)')
     .eq('chat_id', chatId)
     .single();
-  return data?.local_id || null;
+  if (!data) return null;
+  return {
+    localId: data.local_id,
+    timezone: (data as any).locales?.timezone || 'America/Buenos_Aires',
+  };
 }
 
-async function procesarMensajeTexto(
-  db: ReturnType<typeof createServiceClient>,
-  message: TelegramMessage,
-  chatId: number,
-  messageId: number
-) {
+function requireLocal(info: { localId: string; timezone: string } | null, chatId: number, messageId: number) {
+  if (!info) return true;
+  return false;
+}
+
+async function procesarMensajeTexto(db: DB, message: TelegramMessage, chatId: number, messageId: number) {
   const texto = message.text!;
 
-  // /start con codigo de local
   if (texto.startsWith('/start')) {
     const code = texto.split(' ')[1];
     if (code) {
-      const { data: local } = await db
-        .from('locales')
-        .select('id, nombre')
-        .eq('telegram_code', code)
-        .single();
-
+      const { data: local } = await db.from('locales').select('id, nombre').eq('telegram_code', code).single();
       if (local) {
-        await db
-          .from('telegram_links')
-          .upsert({ chat_id: chatId, local_id: local.id }, { onConflict: 'chat_id' });
-        await enviarMensaje(
-          chatId,
-          `✅ <b>Vinculado a "${local.nombre}"</b>\n\nTodos los gastos que mandes desde este chat se guardan ahi.`,
-          messageId
-        );
+        await db.from('telegram_links').upsert({ chat_id: chatId, local_id: local.id }, { onConflict: 'chat_id' });
+        await enviarMensaje(chatId, `✅ <b>Vinculado a "${local.nombre}"</b>\n\nTodos los gastos que mandes desde este chat se guardan ahi.`, messageId);
       } else {
         await enviarMensaje(chatId, '❌ Codigo invalido. Revisa el link de vinculacion.', messageId);
       }
       return;
     }
-
-    // /start sin codigo
-    await enviarMensaje(
-      chatId,
-      '☕ <b>Hola! Soy tu bot de gastos.</b>\n\n' +
-      'Para empezar, necesitas vincular este chat a un local.\n' +
-      'Usa el link de vinculacion que encontras en la configuracion del dashboard.',
-      messageId
-    );
+    await enviarMensaje(chatId, '☕ <b>Hola! Soy tu bot de gastos.</b>\n\nPara empezar, necesitas vincular este chat a un local.\nUsa el link de vinculacion que encontras en la configuracion del dashboard.', messageId);
     return;
   }
 
   if (texto === '/ayuda' || texto === '/help') {
-    await enviarMensaje(
-      chatId,
-      '📖 <b>Como usar el bot</b>\n\n' +
-      '<b>Registrar gastos:</b>\n' +
-      '- Escribi el gasto: "Leche 20L $18.000"\n' +
-      '- Manda foto de factura\n' +
-      '- Manda PDF de factura\n' +
-      '- Graba un audio\n\n' +
-      '<b>Categorias:</b>\n' +
-      '☕ Insumos | 💡 Servicios | 👤 Sueldos\n' +
-      '🏠 Alquiler | 📋 Impuestos | 🔧 Mantenimiento | 📦 Otros',
-      messageId
-    );
+    await enviarMensaje(chatId, '📖 <b>Como usar el bot</b>\n\n<b>Registrar gastos:</b>\n- Escribi el gasto: "Leche 20L $18.000"\n- Manda foto de factura\n- Manda PDF de factura\n- Graba un audio\n\n<b>Categorias:</b>\n☕ Insumos | 💡 Servicios | 👤 Sueldos\n🏠 Alquiler | 📋 Impuestos | 🔧 Mantenimiento | 📦 Otros', messageId);
     return;
   }
 
-  // Verificar vinculacion
-  const localId = await obtenerLocalId(db, chatId);
-  if (!localId) {
-    await enviarMensaje(
-      chatId,
-      '⚠️ Este chat no esta vinculado a ningun local.\n\nUsa el link de vinculacion desde el dashboard (Configuracion > Telegram).',
-      messageId
-    );
+  const info = await obtenerLocalInfo(db, chatId);
+  if (!info) {
+    await enviarMensaje(chatId, '⚠️ Este chat no esta vinculado a ningun local.\n\nUsa el link de vinculacion desde el dashboard (Configuracion > Telegram).', messageId);
     return;
   }
 
-  // Procesar como gasto
   const resultado = await procesarTexto(texto);
 
   if (resultado.monto === 0 || resultado.confianza === 'baja') {
-    await enviarMensaje(
-      chatId,
-      '🤔 No estoy seguro de entender el gasto.\n\n' +
-      'Proba con algo como:\n' +
-      '- "Cafe 5kg $45.000"\n' +
-      '- "Pague la luz $28.500"\n' +
-      '- "Sueldo Juan $150.000"',
-      messageId
-    );
+    await enviarMensaje(chatId, '🤔 No estoy seguro de entender el gasto.\n\nProba con algo como:\n- "Cafe 5kg $45.000"\n- "Pague la luz $28.500"\n- "Sueldo Juan $150.000"', messageId);
     return;
   }
 
-  if (await preguntarSiFalta(db, resultado, chatId, messageId, localId)) return;
+  if (await preguntarSiFalta(db, resultado, chatId, messageId, info.localId)) return;
 
-  await guardarGasto(db, { ...resultado, telegram_message_id: String(messageId) }, localId);
+  await guardarGasto(db, { ...resultado, telegram_message_id: String(messageId) }, info.localId, info.timezone);
   await enviarMensaje(chatId, formatearRespuesta(resultado), messageId);
 }
 
-async function procesarFoto(
-  db: ReturnType<typeof createServiceClient>,
-  message: TelegramMessage,
-  chatId: number,
-  messageId: number
-) {
-  const localId = await obtenerLocalId(db, chatId);
-  if (!localId) {
+async function procesarFoto(db: DB, message: TelegramMessage, chatId: number, messageId: number) {
+  const info = await obtenerLocalInfo(db, chatId);
+  if (!info) {
     await enviarMensaje(chatId, '⚠️ Este chat no esta vinculado a ningun local.', messageId);
     return;
   }
 
   const fotos = message.photo!;
   const fotoGrande = fotos[fotos.length - 1];
-
   await enviarMensaje(chatId, '📸 Analizando la imagen...', messageId);
 
   const { buffer } = await obtenerArchivo(fotoGrande.file_id);
@@ -220,27 +166,21 @@ async function procesarFoto(
     return;
   }
 
-  if (await preguntarSiFalta(db, resultado, chatId, messageId, localId)) return;
+  if (await preguntarSiFalta(db, resultado, chatId, messageId, info.localId)) return;
 
-  await guardarGasto(db, { ...resultado, telegram_message_id: String(messageId) }, localId);
+  await guardarGasto(db, { ...resultado, telegram_message_id: String(messageId) }, info.localId, info.timezone);
   await enviarMensaje(chatId, formatearRespuesta(resultado), messageId);
 }
 
-async function procesarDocumento(
-  db: ReturnType<typeof createServiceClient>,
-  message: TelegramMessage,
-  chatId: number,
-  messageId: number
-) {
+async function procesarDocumento(db: DB, message: TelegramMessage, chatId: number, messageId: number) {
   const doc = message.document!;
-
   if (doc.mime_type !== 'application/pdf') {
     await enviarMensaje(chatId, '📄 Por ahora solo proceso PDFs. Proba mandando una foto o escribiendo el gasto.', messageId);
     return;
   }
 
-  const localId = await obtenerLocalId(db, chatId);
-  if (!localId) {
+  const info = await obtenerLocalInfo(db, chatId);
+  if (!info) {
     await enviarMensaje(chatId, '⚠️ Este chat no esta vinculado a ningun local.', messageId);
     return;
   }
@@ -255,20 +195,15 @@ async function procesarDocumento(
     return;
   }
 
-  if (await preguntarSiFalta(db, resultado, chatId, messageId, localId)) return;
+  if (await preguntarSiFalta(db, resultado, chatId, messageId, info.localId)) return;
 
-  await guardarGasto(db, { ...resultado, telegram_message_id: String(messageId) }, localId);
+  await guardarGasto(db, { ...resultado, telegram_message_id: String(messageId) }, info.localId, info.timezone);
   await enviarMensaje(chatId, formatearRespuesta(resultado), messageId);
 }
 
-async function procesarVoz(
-  db: ReturnType<typeof createServiceClient>,
-  message: TelegramMessage,
-  chatId: number,
-  messageId: number
-) {
-  const localId = await obtenerLocalId(db, chatId);
-  if (!localId) {
+async function procesarVoz(db: DB, message: TelegramMessage, chatId: number, messageId: number) {
+  const info = await obtenerLocalInfo(db, chatId);
+  if (!info) {
     await enviarMensaje(chatId, '⚠️ Este chat no esta vinculado a ningun local.', messageId);
     return;
   }
@@ -280,27 +215,17 @@ async function procesarVoz(
   const resultado = await procesarAudio(transcripcion);
 
   if (resultado.monto === 0 || resultado.confianza === 'baja') {
-    await enviarMensaje(
-      chatId,
-      `🎤 Escuche: "<i>${transcripcion}</i>"\n\n🤔 No pude identificar un gasto claro. Podes repetirlo o escribirlo?`,
-      messageId
-    );
+    await enviarMensaje(chatId, `🎤 Escuche: "<i>${transcripcion}</i>"\n\n🤔 No pude identificar un gasto claro. Podes repetirlo o escribirlo?`, messageId);
     return;
   }
 
-  if (await preguntarSiFalta(db, resultado, chatId, messageId, localId)) return;
+  if (await preguntarSiFalta(db, resultado, chatId, messageId, info.localId)) return;
 
-  await guardarGasto(db, { ...resultado, telegram_message_id: String(messageId) }, localId);
+  await guardarGasto(db, { ...resultado, telegram_message_id: String(messageId) }, info.localId, info.timezone);
   await enviarMensaje(chatId, `🎤 Escuche: "<i>${transcripcion}</i>"\n\n${formatearRespuesta(resultado)}`, messageId);
 }
 
-async function preguntarSiFalta(
-  db: ReturnType<typeof createServiceClient>,
-  resultado: ClaudeGastoResponse,
-  chatId: number,
-  messageId: number,
-  localId: string
-): Promise<boolean> {
+async function preguntarSiFalta(db: DB, resultado: ClaudeGastoResponse, chatId: number, messageId: number, localId: string): Promise<boolean> {
   if (!resultado.campos_faltantes?.length) return false;
 
   const faltante = resultado.campos_faltantes[0];
@@ -317,8 +242,5 @@ async function preguntarSiFalta(
 }
 
 export async function GET() {
-  return NextResponse.json({
-    status: 'Bot activo',
-    timestamp: new Date().toISOString(),
-  });
+  return NextResponse.json({ status: 'Bot activo', timestamp: new Date().toISOString() });
 }

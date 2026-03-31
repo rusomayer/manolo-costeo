@@ -8,6 +8,7 @@ interface LocalInfo {
   nombre: string;
   direccion?: string;
   telegram_code: string;
+  timezone: string;
 }
 
 interface TelegramLink {
@@ -19,6 +20,7 @@ export default function ConfiguracionPage() {
   const [local, setLocal] = useState<LocalInfo | null>(null);
   const [telegramLink, setTelegramLink] = useState<TelegramLink | null>(null);
   const [botUsername, setBotUsername] = useState('');
+  const [tzSaved, setTzSaved] = useState(false);
 
   const supabase = createClient();
 
@@ -33,7 +35,7 @@ export default function ConfiguracionPage() {
 
       const { data: localData } = await supabase
         .from('locales')
-        .select('id, nombre, direccion, telegram_code')
+        .select('id, nombre, direccion, telegram_code, timezone')
         .eq('id', localId)
         .single();
 
@@ -60,7 +62,10 @@ export default function ConfiguracionPage() {
 
   return (
     <div style={{ maxWidth: 600, margin: '0 auto', padding: 20 }}>
-      <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 20 }}>Configuracion</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <h2 style={{ fontSize: 20, fontWeight: 700 }}>Configuracion</h2>
+        <a href="/dashboard" style={{ fontSize: 13, color: 'var(--accent)', textDecoration: 'none' }}>Volver al dashboard</a>
+      </div>
 
       <div style={cardStyle}>
         <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>Datos del local</h3>
@@ -72,6 +77,35 @@ export default function ConfiguracionPage() {
             <p style={valueStyle}>{local.direccion}</p>
           </>
         )}
+      </div>
+
+      <div style={cardStyle}>
+        <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>Zona horaria</h3>
+        <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>
+          Se usa para registrar las fechas correctas de los gastos por Telegram.
+        </p>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <select
+            value={local.timezone}
+            onChange={(e) => setLocal({ ...local, timezone: e.target.value })}
+            style={{ ...inputStyle, flex: 1 }}
+          >
+            {Intl.supportedValuesOf('timeZone').filter(tz => tz.startsWith('America/')).map(tz => (
+              <option key={tz} value={tz}>{tz.replace('America/', '').replace(/_/g, ' ')}</option>
+            ))}
+          </select>
+          <button
+            onClick={async () => {
+              const supabase = createClient();
+              await supabase.from('locales').update({ timezone: local.timezone }).eq('id', local.id);
+              setTzSaved(true);
+              setTimeout(() => setTzSaved(false), 2000);
+            }}
+            style={btnStyle}
+          >
+            {tzSaved ? 'Guardado!' : 'Guardar'}
+          </button>
+        </div>
       </div>
 
       <div style={cardStyle}>

@@ -14,6 +14,7 @@ export interface Local {
   direccion?: string;
   owner_id: string;
   telegram_code: string;
+  timezone: string;
 }
 
 export interface LocalMember {

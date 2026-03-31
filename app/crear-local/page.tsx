@@ -1,6 +1,16 @@
-import { crearLocal } from '@/lib/actions';
+'use client';
+
+import { useRef } from 'react';
 
 export default function CrearLocalPage() {
+  const tzRef = useRef<HTMLInputElement>(null);
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    if (tzRef.current) {
+      tzRef.current.value = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    }
+  }
+
   return (
     <div style={styles.container}>
       <div style={styles.card}>
@@ -10,7 +20,7 @@ export default function CrearLocalPage() {
           Agrega tu cafe, bar o restaurante para empezar a registrar gastos.
         </p>
 
-        <form action={crearLocal}>
+        <form action="/api/crear-local" method="POST" onSubmit={handleSubmit}>
           <label style={styles.label}>Nombre del local</label>
           <input
             name="nombre"
@@ -27,6 +37,8 @@ export default function CrearLocalPage() {
             placeholder="Ej: Av. Corrientes 1234"
             style={styles.input}
           />
+
+          <input type="hidden" name="timezone" ref={tzRef} />
 
           <button type="submit" style={styles.submitBtn}>
             Crear local
