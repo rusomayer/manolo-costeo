@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { TelegramUpdate, TelegramMessage, ClaudeGastoResponse } from '@/lib/types';
 import { enviarMensaje, obtenerArchivo, formatearRespuesta, formatearError } from '@/lib/telegram';
-import { procesarTexto, procesarImagen, procesarPDF, transcribirAudio, procesarAudio, procesarRespuestaFollowUp } from '@/lib/claude';
+import { procesarTexto, procesarImagen, procesarPDF, transcribirAudio, procesarAudio, procesarRespuestaFollowUp, clasificarIntencion } from '@/lib/claude';
+import { consultaManolo } from '@/lib/asistente';
 import { guardarGasto, guardarGastoPendiente, buscarGastoPendiente, buscarUltimoPendiente, eliminarGastoPendiente, limpiarPendientesExpirados, autoRegistrarPrecio } from '@/lib/supabase';
 import { createServiceClient } from '@/lib/supabase/service';
 
@@ -124,7 +125,7 @@ async function procesarMensajeTexto(db: DB, message: TelegramMessage, chatId: nu
   }
 
   if (texto === '/ayuda' || texto === '/help') {
-    await enviarMensaje(chatId, '📖 <b>Como usar el bot</b>\n\n<b>Registrar gastos:</b>\n- Escribi el gasto: "Leche 20L $18.000"\n- Manda foto de factura\n- Manda PDF de factura\n- Graba un audio\n\n<b>Categorias:</b>\n☕ Insumos | 💡 Servicios | 👤 Sueldos\n🏠 Alquiler | 📋 Impuestos | 🔧 Mantenimiento | 📦 Otros', messageId);
+    await enviarMensaje(chatId, '📖 <b>Como usar el bot</b>\n\n<b>Registrar gastos:</b>\n- Escribí el gasto: "Leche 20L $18.000"\n- Mandá foto de factura\n- Mandá PDF de factura\n- Grabá un audio\n\n<b>Hacerle preguntas a Manolo:</b>\n- "¿Cuánto gasté este mes?"\n- "¿Cuánto pago el kilo de café?"\n- "¿Cuáles son mis gastos fijos?"\n- "Compará este mes con el anterior"\n\n<b>Categorias:</b>\n☕ Insumos | 💡 Servicios | 👤 Sueldos\n🏠 Alquiler | 📋 Impuestos | 🔧 Mantenimiento | 📦 Otros', messageId);
     return;
   }
 
@@ -134,10 +135,22 @@ async function procesarMensajeTexto(db: DB, message: TelegramMessage, chatId: nu
     return;
   }
 
+  // Classify intent: is this an expense or a question?
+  const intencion = await clasificarIntencion(texto);
+
+  if (intencion === 'consulta') {
+    // Route to Manolo assistant
+    await enviarMensaje(chatId, '🤔 Consultando...', messageId);
+    const respuesta = await consultaManolo(db, info.localId, texto);
+    await enviarMensaje(chatId, `🤖 <b>Manolo dice:</b>\n\n${respuesta}`, messageId);
+    return;
+  }
+
+  // Route to expense processing
   const resultado = await procesarTexto(texto, info.timezone);
 
   if (resultado.monto === 0 || resultado.confianza === 'baja') {
-    await enviarMensaje(chatId, '🤔 No estoy seguro de entender el gasto.\n\nProba con algo como:\n- "Cafe 5kg $45.000"\n- "Pague la luz $28.500"\n- "Sueldo Juan $150.000"', messageId);
+    await enviarMensaje(chatId, '🤔 No estoy seguro de entender el gasto.\n\nProba con algo como:\n- "Cafe 5kg $45.000"\n- "Pague la luz $28.500"\n- "Sueldo Juan $150.000"\n\nTambién podés hacerme preguntas como:\n- "¿Cuánto gasté este mes?"\n- "¿Cuánto pago el kilo de café?"', messageId);
     return;
   }
 
@@ -215,17 +228,27 @@ async function procesarVoz(db: DB, message: TelegramMessage, chatId: number, mes
 
   const { buffer } = await obtenerArchivo(message.voice!.file_id);
   const transcripcion = await transcribirAudio(buffer);
+
+  // Classify intent from transcription
+  const intencion = await clasificarIntencion(transcripcion);
+
+  if (intencion === 'consulta') {
+    const respuesta = await consultaManolo(db, info.localId, transcripcion);
+    await enviarMensaje(chatId, `🎤 Escuché: "<i>${transcripcion}</i>"\n\n🤖 <b>Manolo dice:</b>\n\n${respuesta}`, messageId);
+    return;
+  }
+
   const resultado = await procesarAudio(transcripcion, info.timezone);
 
   if (resultado.monto === 0 || resultado.confianza === 'baja') {
-    await enviarMensaje(chatId, `🎤 Escuche: "<i>${transcripcion}</i>"\n\n🤔 No pude identificar un gasto claro. Podes repetirlo o escribirlo?`, messageId);
+    await enviarMensaje(chatId, `🎤 Escuché: "<i>${transcripcion}</i>"\n\n🤔 No pude identificar un gasto claro. Podés repetirlo o escribirlo?`, messageId);
     return;
   }
 
   if (await preguntarSiFalta(db, resultado, chatId, messageId, info.localId)) return;
 
   await guardarGasto(db, { ...resultado, telegram_message_id: String(messageId) }, info.localId, info.timezone);
-  await enviarMensaje(chatId, `🎤 Escuche: "<i>${transcripcion}</i>"\n\n${formatearRespuesta(resultado)}`, messageId);
+  await enviarMensaje(chatId, `🎤 Escuché: "<i>${transcripcion}</i>"\n\n${formatearRespuesta(resultado)}`, messageId);
 }
 
 async function preguntarSiFalta(db: DB, resultado: ClaudeGastoResponse, chatId: number, messageId: number, localId: string): Promise<boolean> {

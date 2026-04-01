@@ -383,3 +383,15 @@ export async function chatConManolo(
   const textBlock = response.content.find(block => block.type === 'text');
   return textBlock && 'text' in textBlock ? textBlock.text : 'No pude procesar tu consulta. Intentá reformularla.';
 }
+
+/**
+ * Version simplificada para Telegram: recibe una sola pregunta (sin historial).
+ * Usa cualquier SupabaseClient (incluido service client).
+ */
+export async function consultaManolo(
+  client: SupabaseClient,
+  localId: string,
+  pregunta: string
+): Promise<string> {
+  return chatConManolo(client, localId, [{ role: 'user', content: pregunta }]);
+}

@@ -236,6 +236,31 @@ NO incluyas "campos_faltantes" en la respuesta.`,
   }
 }
 
+// --- Intent Classification ---
+
+export type IntencionMensaje = 'gasto' | 'consulta';
+
+export async function clasificarIntencion(texto: string): Promise<IntencionMensaje> {
+  const response = await anthropic.messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 20,
+    system: `Clasificá el siguiente mensaje de un usuario de un sistema de gestión de costos gastronómicos.
+Respondé SOLO con una de estas dos palabras:
+- "gasto" si el usuario está registrando un gasto/compra/pago (ej: "Leche 20L $18.000", "Pagué la luz $28.500", "Café 5kg proveedor Juan")
+- "consulta" si el usuario está haciendo una pregunta o pidiendo información (ej: "¿Cuánto gasté este mes?", "¿Cuánto pago de café?", "Comparame con el mes pasado", "¿Cuál es mi gasto fijo?")
+
+Respondé ÚNICAMENTE "gasto" o "consulta", nada más.`,
+    messages: [{ role: 'user', content: texto }],
+  });
+
+  const content = response.content[0];
+  if (content.type === 'text') {
+    const cleaned = content.text.trim().toLowerCase();
+    if (cleaned === 'consulta') return 'consulta';
+  }
+  return 'gasto'; // default: treat as expense
+}
+
 export async function transcribirAudio(audioBuffer: Buffer): Promise<string> {
   const OpenAI = (await import('openai')).default;
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
