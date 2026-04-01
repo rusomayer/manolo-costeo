@@ -63,10 +63,6 @@ export default async function DashboardLayout({
   const selectedLocalId = cookieStore.get('selected_local')?.value;
   const selectedLocal = locales.find((l) => l.id === selectedLocalId) || locales[0];
 
-  if (selectedLocal.id !== selectedLocalId) {
-    cookieStore.set('selected_local', selectedLocal.id, { path: '/', maxAge: 60 * 60 * 24 * 365 });
-  }
-
   const botUsername = process.env.NEXT_PUBLIC_BOT_USERNAME || 'manolocosteo_bot';
   const telegramLink = `https://t.me/${botUsername}?start=${selectedLocal.telegram_code}`;
   const twiioCode = (selectedLocal as any).twilio_code;
