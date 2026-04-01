@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { obtenerGastos, obtenerResumen, guardarGasto } from '@/lib/supabase';
+import { obtenerGastos, obtenerResumen, guardarGasto, autoRegistrarPrecio } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
@@ -90,6 +90,9 @@ export async function POST(request: NextRequest) {
       .single();
 
     const gasto = await guardarGasto(supabase, body, localId, local?.timezone);
+
+    // Auto-registrar precio si tiene cantidad/unidad (insumo)
+    await autoRegistrarPrecio(supabase, { ...body, fecha: gasto.fecha }, localId);
 
     return NextResponse.json({ gasto }, { status: 201 });
   } catch (error) {

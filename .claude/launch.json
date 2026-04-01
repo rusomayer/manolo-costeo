@@ -1,0 +1,14 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "manolo-dev",
+      "runtimeExecutable": "/Users/enana/.nvm/versions/node/v20.20.2/bin/node",
+      "runtimeArgs": ["/Users/enana/Desktop/Projects/manolo-costeo/node_modules/.bin/next", "dev"],
+      "env": {
+        "PATH": "/Users/enana/.nvm/versions/node/v20.20.2/bin:/usr/bin:/bin"
+      },
+      "port": 3000
+    }
+  ]
+}

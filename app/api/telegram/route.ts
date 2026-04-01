@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { TelegramUpdate, TelegramMessage, ClaudeGastoResponse } from '@/lib/types';
 import { enviarMensaje, obtenerArchivo, formatearRespuesta, formatearError } from '@/lib/telegram';
 import { procesarTexto, procesarImagen, procesarPDF, transcribirAudio, procesarAudio, procesarRespuestaFollowUp } from '@/lib/claude';
-import { guardarGasto, guardarGastoPendiente, buscarGastoPendiente, buscarUltimoPendiente, eliminarGastoPendiente, limpiarPendientesExpirados } from '@/lib/supabase';
+import { guardarGasto, guardarGastoPendiente, buscarGastoPendiente, buscarUltimoPendiente, eliminarGastoPendiente, limpiarPendientesExpirados, autoRegistrarPrecio } from '@/lib/supabase';
 import { createServiceClient } from '@/lib/supabase/service';
 
 type DB = ReturnType<typeof createServiceClient>;
@@ -47,7 +47,8 @@ export async function POST(request: NextRequest) {
         if (textoRespuesta) {
           const info = await obtenerLocalInfo(db, chatId);
           const merged = await procesarRespuestaFollowUp(pendiente.gasto_data, textoRespuesta, pendiente.campo_esperado, info?.timezone);
-          await guardarGasto(db, { ...merged, telegram_message_id: String(messageId) }, pendiente.local_id, info?.timezone);
+          const gastoGuardado = await guardarGasto(db, { ...merged, telegram_message_id: String(messageId) }, pendiente.local_id, info?.timezone);
+          await autoRegistrarPrecio(db, { ...merged, fecha: gastoGuardado.fecha }, pendiente.local_id);
           await eliminarGastoPendiente(db, pendiente.id);
           await enviarMensaje(chatId, formatearRespuesta(merged), messageId);
           return NextResponse.json({ ok: true });
@@ -142,7 +143,8 @@ async function procesarMensajeTexto(db: DB, message: TelegramMessage, chatId: nu
 
   if (await preguntarSiFalta(db, resultado, chatId, messageId, info.localId)) return;
 
-  await guardarGasto(db, { ...resultado, telegram_message_id: String(messageId) }, info.localId, info.timezone);
+  const gastoGuardado = await guardarGasto(db, { ...resultado, telegram_message_id: String(messageId) }, info.localId, info.timezone);
+  await autoRegistrarPrecio(db, { ...resultado, fecha: gastoGuardado.fecha, categoria: resultado.categoria }, info.localId);
   await enviarMensaje(chatId, formatearRespuesta(resultado), messageId);
 }
 
@@ -167,7 +169,8 @@ async function procesarFoto(db: DB, message: TelegramMessage, chatId: number, me
 
   if (await preguntarSiFalta(db, resultado, chatId, messageId, info.localId)) return;
 
-  await guardarGasto(db, { ...resultado, telegram_message_id: String(messageId) }, info.localId, info.timezone);
+  const gastoGuardado = await guardarGasto(db, { ...resultado, telegram_message_id: String(messageId) }, info.localId, info.timezone);
+  await autoRegistrarPrecio(db, { ...resultado, fecha: gastoGuardado.fecha, categoria: resultado.categoria }, info.localId);
   await enviarMensaje(chatId, formatearRespuesta(resultado), messageId);
 }
 
@@ -196,7 +199,8 @@ async function procesarDocumento(db: DB, message: TelegramMessage, chatId: numbe
 
   if (await preguntarSiFalta(db, resultado, chatId, messageId, info.localId)) return;
 
-  await guardarGasto(db, { ...resultado, telegram_message_id: String(messageId) }, info.localId, info.timezone);
+  const gastoGuardado = await guardarGasto(db, { ...resultado, telegram_message_id: String(messageId) }, info.localId, info.timezone);
+  await autoRegistrarPrecio(db, { ...resultado, fecha: gastoGuardado.fecha, categoria: resultado.categoria }, info.localId);
   await enviarMensaje(chatId, formatearRespuesta(resultado), messageId);
 }
 

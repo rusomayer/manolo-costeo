@@ -58,3 +58,38 @@ input, select {
   font-family: inherit;
   font-size: 14px;
 }
+
+/* Dashboard layout with sidebar */
+.dashboard-layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.dashboard-main {
+  margin-left: 240px;
+  flex: 1;
+  min-height: 100vh;
+}
+
+/* Sidebar nav link hover */
+.dashboard-layout aside nav a:hover {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+  text-decoration: none;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .dashboard-main {
+    margin-left: 0;
+    padding-top: 56px;
+  }
+
+  .dashboard-layout aside {
+    transform: translateX(-100%);
+  }
+
+  .dashboard-layout button[aria-label="Menu"] {
+    display: block !important;
+  }
+}

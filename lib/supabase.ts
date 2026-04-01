@@ -1,5 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js';
-import { Gasto, GastoInput, ClaudeGastoResponse, TipoGasto } from './types';
+import { Gasto, GastoInput, ClaudeGastoResponse, TipoGasto, Proveedor, ProveedorInput, PrecioProducto, PrecioProductoInput } from './types';
 
 function fechaLocal(timezone: string): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: timezone });
@@ -141,6 +141,233 @@ export async function eliminarGasto(
     console.error('Error eliminando gasto:', error);
     throw error;
   }
+}
+
+// --- Auto-registro de precios desde gastos ---
+
+export async function autoRegistrarPrecio(
+  client: SupabaseClient,
+  gasto: { descripcion: string; monto: number; proveedor?: string; cantidad?: number; unidad?: string; fecha?: string; categoria?: string },
+  localId: string
+): Promise<void> {
+  // Solo registrar precio si es un insumo con cantidad y unidad
+  if (!gasto.cantidad || !gasto.unidad || gasto.cantidad <= 0) return;
+  if (gasto.categoria && gasto.categoria !== 'insumos') return;
+
+  try {
+    // Buscar si el proveedor existe, si no, crearlo
+    let proveedorId: string | undefined;
+    if (gasto.proveedor) {
+      const { data: existente } = await client
+        .from('proveedores')
+        .select('id')
+        .eq('local_id', localId)
+        .ilike('nombre', gasto.proveedor)
+        .limit(1)
+        .maybeSingle();
+
+      if (existente) {
+        proveedorId = existente.id;
+      } else {
+        const { data: nuevo } = await client
+          .from('proveedores')
+          .insert([{ nombre: gasto.proveedor, local_id: localId }])
+          .select('id')
+          .single();
+        proveedorId = nuevo?.id;
+      }
+    }
+
+    await client.from('precios_productos').insert([{
+      producto: gasto.descripcion,
+      proveedor_id: proveedorId || null,
+      precio: gasto.monto,
+      cantidad: gasto.cantidad,
+      unidad: gasto.unidad,
+      fecha: gasto.fecha || new Date().toLocaleDateString('en-CA'),
+      local_id: localId,
+    }]);
+  } catch (error) {
+    // No fallar el guardado del gasto si el auto-registro de precio falla
+    console.error('Error auto-registrando precio:', error);
+  }
+}
+
+// --- Proveedores ---
+
+export async function obtenerProveedores(
+  client: SupabaseClient,
+  localId: string
+): Promise<Proveedor[]> {
+  const { data, error } = await client
+    .from('proveedores')
+    .select('*')
+    .eq('local_id', localId)
+    .order('nombre', { ascending: true });
+
+  if (error) {
+    console.error('Error obteniendo proveedores:', error);
+    throw error;
+  }
+
+  return data || [];
+}
+
+export async function guardarProveedor(
+  client: SupabaseClient,
+  proveedor: ProveedorInput,
+  localId: string
+): Promise<Proveedor> {
+  const { data, error } = await client
+    .from('proveedores')
+    .insert([{
+      nombre: proveedor.nombre,
+      contacto: proveedor.contacto || null,
+      notas: proveedor.notas || null,
+      local_id: localId,
+    }])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error guardando proveedor:', error);
+    throw error;
+  }
+
+  return data;
+}
+
+export async function actualizarProveedor(
+  client: SupabaseClient,
+  proveedorId: string,
+  localId: string,
+  updates: Partial<ProveedorInput>
+): Promise<Proveedor> {
+  const { data, error } = await client
+    .from('proveedores')
+    .update(updates)
+    .eq('id', proveedorId)
+    .eq('local_id', localId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error actualizando proveedor:', error);
+    throw error;
+  }
+
+  return data;
+}
+
+export async function eliminarProveedor(
+  client: SupabaseClient,
+  proveedorId: string,
+  localId: string
+): Promise<void> {
+  const { error } = await client
+    .from('proveedores')
+    .delete()
+    .eq('id', proveedorId)
+    .eq('local_id', localId);
+
+  if (error) {
+    console.error('Error eliminando proveedor:', error);
+    throw error;
+  }
+}
+
+// --- Precios de productos ---
+
+export async function obtenerPrecios(
+  client: SupabaseClient,
+  localId: string,
+  filtros?: { producto?: string; proveedor_id?: string }
+): Promise<PrecioProducto[]> {
+  let query = client
+    .from('precios_productos')
+    .select('*, proveedores(nombre)')
+    .eq('local_id', localId)
+    .order('fecha', { ascending: false });
+
+  if (filtros?.producto) {
+    query = query.ilike('producto', `%${filtros.producto}%`);
+  }
+  if (filtros?.proveedor_id) {
+    query = query.eq('proveedor_id', filtros.proveedor_id);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error('Error obteniendo precios:', error);
+    throw error;
+  }
+
+  return (data || []).map((p: any) => ({
+    ...p,
+    proveedor_nombre: p.proveedores?.nombre || null,
+    proveedores: undefined,
+  }));
+}
+
+export async function guardarPrecio(
+  client: SupabaseClient,
+  precio: PrecioProductoInput,
+  localId: string
+): Promise<PrecioProducto> {
+  const { data, error } = await client
+    .from('precios_productos')
+    .insert([{
+      producto: precio.producto,
+      proveedor_id: precio.proveedor_id || null,
+      precio: precio.precio,
+      cantidad: precio.cantidad,
+      unidad: precio.unidad,
+      fecha: precio.fecha || new Date().toLocaleDateString('en-CA'),
+      local_id: localId,
+    }])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error guardando precio:', error);
+    throw error;
+  }
+
+  return data;
+}
+
+export async function obtenerUltimoPrecio(
+  client: SupabaseClient,
+  localId: string,
+  producto: string,
+  unidad?: string
+): Promise<PrecioProducto | null> {
+  let query = client
+    .from('precios_productos')
+    .select('*, proveedores(nombre)')
+    .eq('local_id', localId)
+    .ilike('producto', `%${producto}%`)
+    .order('fecha', { ascending: false })
+    .limit(1);
+
+  if (unidad) {
+    query = query.eq('unidad', unidad);
+  }
+
+  const { data, error } = await query.maybeSingle();
+
+  if (error) {
+    console.error('Error obteniendo último precio:', error);
+    return null;
+  }
+
+  if (!data) return null;
+
+  return {
+    ...data,
+    proveedor_nombre: (data as any).proveedores?.nombre || null,
+  };
 }
 
 // --- Gastos pendientes (follow-up questions) ---

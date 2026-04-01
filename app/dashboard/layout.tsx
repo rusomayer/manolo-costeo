@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { signOut } from '@/lib/actions';
 import { Local } from '@/lib/types';
-import TelegramButton from './telegram-button';
+import Sidebar from './sidebar';
 
 export default async function DashboardLayout({
   children,
@@ -28,21 +28,21 @@ export default async function DashboardLayout({
   if (locales.length === 0) {
     return (
       <div>
-        <header style={headerStyles.header}>
-          <div style={headerStyles.left}>
-            <span style={{ fontSize: 24 }}>&#9749;</span>
-            <h1 style={headerStyles.title}>Manolo Costeo</h1>
+        <header style={emptyHeaderStyles.header}>
+          <div style={emptyHeaderStyles.left}>
+            <span style={{ fontSize: 24 }}>☕</span>
+            <h1 style={emptyHeaderStyles.title}>Manolo Costeo</h1>
           </div>
-          <div style={headerStyles.right}>
-            <span style={headerStyles.email}>{user.email}</span>
+          <div style={emptyHeaderStyles.right}>
+            <span style={emptyHeaderStyles.email}>{user.email}</span>
             <form action={signOut}>
-              <button type="submit" style={headerStyles.logoutBtn}>Salir</button>
+              <button type="submit" style={emptyHeaderStyles.logoutBtn}>Salir</button>
             </form>
           </div>
         </header>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 'calc(100vh - 60px)', padding: 20 }}>
           <div style={{ textAlign: 'center', maxWidth: 400 }}>
-            <span style={{ fontSize: 64, display: 'block' }}>&#127978;</span>
+            <span style={{ fontSize: 64, display: 'block' }}>🏪</span>
             <h2 style={{ fontSize: 22, fontWeight: 700, marginTop: 16 }}>Bienvenido!</h2>
             <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 8, marginBottom: 24 }}>
               Todavia no tenes ningun local. Crea el primero para empezar a registrar gastos.
@@ -71,50 +71,23 @@ export default async function DashboardLayout({
   const telegramLink = `https://t.me/${botUsername}?start=${selectedLocal.telegram_code}`;
 
   return (
-    <div>
-      <header style={headerStyles.header}>
-        <div style={headerStyles.left}>
-          <span style={{ fontSize: 24 }}>&#9749;</span>
-          <div>
-            <h1 style={headerStyles.title}>{selectedLocal.nombre}</h1>
-            {locales.length > 1 && (
-              <form style={{ marginTop: 4 }}>
-                <select style={headerStyles.select} defaultValue={selectedLocal.id} name="localId">
-                  {locales.map((l) => (
-                    <option key={l.id} value={l.id}>{l.nombre}</option>
-                  ))}
-                </select>
-              </form>
-            )}
-          </div>
-        </div>
-        <div style={headerStyles.right}>
-          <TelegramButton telegramLink={telegramLink} />
-          <a href="/dashboard/gastos" style={headerStyles.link}>Gastos</a>
-          <a href="/dashboard/configuracion" style={headerStyles.link}>Config</a>
-          <a href="/dashboard/invitar" style={headerStyles.link}>Invitar</a>
-          <span style={headerStyles.email}>{user.email}</span>
-          <form action={signOut}>
-            <button type="submit" style={headerStyles.logoutBtn}>Salir</button>
-          </form>
-        </div>
-      </header>
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `
-            document.querySelector('select[name="localId"]')?.addEventListener('change', function(e) {
-              document.cookie = 'selected_local=' + e.target.value + ';path=/;max-age=31536000';
-              window.location.reload();
-            });
-          `,
-        }}
+    <div className="dashboard-layout">
+      <Sidebar
+        locales={locales}
+        selectedLocal={selectedLocal}
+        userEmail={user.email || ''}
+        telegramLink={telegramLink}
+        signOutAction={signOut}
       />
-      {children}
+      <main className="dashboard-main">
+        {children}
+      </main>
     </div>
   );
 }
 
-const headerStyles: Record<string, React.CSSProperties> = {
+// Only used for the empty state (no locales)
+const emptyHeaderStyles: Record<string, React.CSSProperties> = {
   header: {
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
     padding: '12px 20px', background: 'var(--bg-primary)',
@@ -122,12 +95,7 @@ const headerStyles: Record<string, React.CSSProperties> = {
   },
   left: { display: 'flex', alignItems: 'center', gap: 10 },
   title: { fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' },
-  select: {
-    fontSize: 12, padding: '2px 6px', border: '1px solid var(--border)',
-    borderRadius: 4, background: 'var(--bg-secondary)', color: 'var(--text-primary)',
-  },
   right: { display: 'flex', alignItems: 'center', gap: 12 },
-  link: { fontSize: 13, color: 'var(--accent)', textDecoration: 'none' },
   email: { fontSize: 12, color: 'var(--text-muted)' },
   logoutBtn: {
     fontSize: 13, padding: '6px 12px', border: '1px solid var(--border)',

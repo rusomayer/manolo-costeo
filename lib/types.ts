@@ -122,6 +122,87 @@ export interface TelegramUpdate {
   message?: TelegramMessage;
 }
 
+// --- Proveedores ---
+
+export interface Proveedor {
+  id: string;
+  created_at: string;
+  nombre: string;
+  contacto?: string;
+  notas?: string;
+  local_id: string;
+}
+
+export interface ProveedorInput {
+  nombre: string;
+  contacto?: string;
+  notas?: string;
+}
+
+// --- Precios de productos ---
+
+export interface PrecioProducto {
+  id: string;
+  created_at: string;
+  producto: string;
+  proveedor_id?: string;
+  proveedor_nombre?: string; // joined
+  precio: number;
+  cantidad: number;
+  unidad: string;
+  precio_por_unidad: number;
+  fecha: string;
+  local_id: string;
+}
+
+export interface PrecioProductoInput {
+  producto: string;
+  proveedor_id?: string;
+  precio: number;
+  cantidad: number;
+  unidad: string;
+  fecha?: string;
+}
+
+// --- Recetas ---
+
+export interface Receta {
+  id: string;
+  created_at: string;
+  nombre: string;
+  descripcion?: string;
+  categoria?: string;
+  porciones: number;
+  precio_venta?: number;
+  local_id: string;
+}
+
+export interface RecetaInput {
+  nombre: string;
+  descripcion?: string;
+  categoria?: string;
+  porciones?: number;
+  precio_venta?: number;
+}
+
+export interface RecetaIngrediente {
+  id: string;
+  receta_id: string;
+  producto: string;
+  cantidad: number;
+  unidad: string;
+  costo_override?: number;
+}
+
+export interface RecetaIngredienteInput {
+  producto: string;
+  cantidad: number;
+  unidad: string;
+  costo_override?: number;
+}
+
+// --- Claude responses ---
+
 export interface ClaudeGastoResponse {
   descripcion: string;
   monto: number;
