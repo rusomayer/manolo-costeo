@@ -101,7 +101,15 @@ export async function POST(request: NextRequest) {
     // Procesar mensaje nuevo
     try {
       if (messageBody) {
-        await procesarMensajeTextoTwilio(db, messageBody, phoneNumber);
+        // Verificar si es comando /link
+        if (messageBody.toLowerCase().startsWith('/link ')) {
+          const codigo = messageBody.slice(6).trim();
+          await procesarComandoLink(db, phoneNumber, codigo);
+        } else if (messageBody === '/help' || messageBody === '/ayuda') {
+          await enviarMensajeTwilio(phoneNumber, '📖 <b>Como usar Manolo</b>\n\n<b>Registrar gastos:</b>\n- "Leche 20L $18.000"\n- "Pagué la luz $28.500"\n\n<b>Hacer preguntas:</b>\n- "¿Cuánto gasté este mes?"\n- "¿Cuál es mi gasto fijo?"\n\n<b>Vincularse a un local:</b>\n- /link CODIGO_DEL_LOCAL');
+        } else {
+          await procesarMensajeTextoTwilio(db, messageBody, phoneNumber);
+        }
       } else if (numMedia > 0) {
         // Para Twilio Sandbox, no podemos procesar medias fácilmente
         await enviarMensajeTwilio(phoneNumber, '📸 Por ahora en testing solo puedo procesar texto. Escribí el gasto como:\n"Leche 20L $18.000"');
@@ -117,6 +125,36 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error en webhook Twilio:', error);
     return NextResponse.json({ ok: false }, { status: 500 });
+  }
+}
+
+async function procesarComandoLink(db: DB, phoneNumber: string, codigo: string) {
+  try {
+    // Buscar el local por twilio_code
+    const { data: local, error } = await db
+      .from('locales')
+      .select('id, nombre, timezone')
+      .eq('twilio_code', codigo)
+      .maybeSingle();
+
+    if (error || !local) {
+      await enviarMensajeTwilio(phoneNumber, '❌ Código inválido. Verifica que esté correcto.');
+      return;
+    }
+
+    // Vincular el número al local
+    await db.from('twilio_links').upsert(
+      { phone_number: phoneNumber, local_id: local.id },
+      { onConflict: 'phone_number' }
+    );
+
+    await enviarMensajeTwilio(
+      phoneNumber,
+      `✅ <b>Vinculado a "${local.nombre}"</b>\n\nTodos tus mensajes desde aquí se guardarán en este local.\n\nAhora puedes:\n- Escribir gastos: "Leche 20L $18.000"\n- Hacer preguntas: "¿Cuánto gasté este mes?"\n\nEscribe /help para más info.`
+    );
+  } catch (error) {
+    console.error('Error en /link:', error);
+    await enviarMensajeTwilio(phoneNumber, '❌ Error vinculando. Intentá de nuevo más tarde.');
   }
 }
 
