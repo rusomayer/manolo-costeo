@@ -1,21 +1,16 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-
-interface Gasto {
-  id: string;
-  created_at: string;
-  fecha: string;
-  descripcion: string;
-  monto: number;
-  categoria: string;
-  proveedor?: string;
-}
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { Gasto, GastoInput, TipoGasto } from '@/lib/types';
+import FiltroFechas from './components/FiltroFechas';
+import ModalGasto from './components/ModalGasto';
+import FormGasto from './components/FormGasto';
 
 interface Resumen {
   total: number;
   porCategoria: Record<string, number>;
+  porTipo: Record<string, number>;
   cantidad: number;
 }
 
@@ -44,31 +39,51 @@ export default function Dashboard() {
   const [resumen, setResumen] = useState<Resumen | null>(null);
   const [loading, setLoading] = useState(true);
   const [filtroCategoria, setFiltroCategoria] = useState<string>('');
-  const [mesActual, setMesActual] = useState(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const [mostrarForm, setMostrarForm] = useState(false);
+
+  // Initialize to current month
+  const [desde, setDesde] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+  });
+  const [hasta, setHasta] = useState(() => {
+    const d = new Date();
+    const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    return last.toLocaleDateString('en-CA');
   });
 
   useEffect(() => {
     cargarDatos();
-  }, [mesActual, filtroCategoria]);
+  }, [desde, hasta, filtroCategoria]);
 
   async function cargarDatos() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      params.set('mes', mesActual);
+      if (desde) params.set('desde', desde);
+      if (hasta) params.set('hasta', hasta);
       if (filtroCategoria) params.set('categoria', filtroCategoria);
 
       const res = await fetch(`/api/gastos?${params}`);
       const data = await res.json();
-      
+
       setGastos(data.gastos || []);
       setResumen(data.resumen || null);
     } catch (error) {
       console.error('Error cargando datos:', error);
     }
     setLoading(false);
+  }
+
+  async function handleCrear(data: GastoInput & { tipo_gasto?: TipoGasto }) {
+    const res = await fetch('/api/gastos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Error creando gasto');
+    setMostrarForm(false);
+    cargarDatos();
   }
 
   const formatMonto = (monto: number) => {
@@ -87,52 +102,77 @@ export default function Dashboard() {
       }))
     : [];
 
-  const [anio, mes] = mesActual.split('-').map(Number);
-  const nombreMes = new Date(anio, mes - 1).toLocaleDateString('es-AR', {
-    month: 'long',
-    year: 'numeric',
-  });
+  // Build period label from desde/hasta
+  const periodoLabel = (() => {
+    if (!desde || !hasta) return 'Período';
+    const dDesde = new Date(desde + 'T12:00:00');
+    const dHasta = new Date(hasta + 'T12:00:00');
+    // Check if it's a full month
+    if (dDesde.getDate() === 1 && dHasta.getDate() === new Date(dHasta.getFullYear(), dHasta.getMonth() + 1, 0).getDate() && dDesde.getMonth() === dHasta.getMonth()) {
+      return dDesde.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
+    }
+    return `${dDesde.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })} - ${dHasta.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}`;
+  })();
 
   return (
     <div style={{ minHeight: '100vh', padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
       {/* Header */}
-      <header style={{ marginBottom: '32px' }}>
-        <h1 style={{ fontSize: '28px', fontWeight: '600', marginBottom: '4px' }}>
-          ☕ Gastos del Café
-        </h1>
-        <p style={{ color: 'var(--text-secondary)' }}>
-          {nombreMes.charAt(0).toUpperCase() + nombreMes.slice(1)}
-        </p>
+      <header style={{
+        marginBottom: '24px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        flexWrap: 'wrap',
+        gap: '12px',
+      }}>
+        <div>
+          <h1 style={{ fontSize: '28px', fontWeight: '600', marginBottom: '4px' }}>
+            ☕ Gastos del Café
+          </h1>
+          <p style={{ color: 'var(--text-secondary)' }}>
+            {periodoLabel.charAt(0).toUpperCase() + periodoLabel.slice(1)}
+          </p>
+        </div>
+        <button
+          onClick={() => setMostrarForm(true)}
+          style={{
+            padding: '10px 20px',
+            borderRadius: 'var(--radius-sm)',
+            border: 'none',
+            background: 'var(--accent)',
+            color: '#fff',
+            fontSize: '14px',
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          + Agregar gasto
+        </button>
       </header>
 
       {/* Filtros */}
-      <div style={{ 
-        display: 'flex', 
-        gap: '12px', 
+      <div style={{
+        display: 'flex',
+        gap: '12px',
         marginBottom: '24px',
-        flexWrap: 'wrap'
+        flexWrap: 'wrap',
+        alignItems: 'center',
       }}>
-        <input
-          type="month"
-          value={mesActual}
-          onChange={(e) => setMesActual(e.target.value)}
-          style={{
-            padding: '8px 12px',
-            borderRadius: 'var(--radius-sm)',
-            border: '1px solid var(--border)',
-            background: 'var(--bg-primary)',
-            color: 'var(--text-primary)',
-          }}
+        <FiltroFechas
+          desde={desde}
+          hasta={hasta}
+          onChange={(d, h) => { setDesde(d); setHasta(h); }}
         />
         <select
           value={filtroCategoria}
           onChange={(e) => setFiltroCategoria(e.target.value)}
           style={{
-            padding: '8px 12px',
+            padding: '6px 12px',
             borderRadius: 'var(--radius-sm)',
             border: '1px solid var(--border)',
             background: 'var(--bg-primary)',
             color: 'var(--text-primary)',
+            fontSize: '13px',
           }}
         >
           <option value="">Todas las categorías</option>
@@ -157,30 +197,21 @@ export default function Dashboard() {
             gap: '16px',
             marginBottom: '32px',
           }}>
-            <MetricCard 
-              label="Total del mes" 
-              value={formatMonto(resumen?.total || 0)} 
+            <MetricCard
+              label="Total del período"
+              value={formatMonto(resumen?.total || 0)}
             />
-            <MetricCard 
-              label="Gastos registrados" 
-              value={String(resumen?.cantidad || 0)} 
+            <MetricCard
+              label="Gastos registrados"
+              value={String(resumen?.cantidad || 0)}
             />
-            <MetricCard 
-              label="Promedio por gasto" 
-              value={formatMonto(resumen?.cantidad ? (resumen.total / resumen.cantidad) : 0)} 
+            <MetricCard
+              label="Gastos fijos"
+              value={formatMonto(resumen?.porTipo?.fijo || 0)}
             />
-            <MetricCard 
-              label="Mayor categoría" 
-              value={
-                resumen?.porCategoria 
-                  ? Object.entries(resumen.porCategoria)
-                      .sort((a, b) => b[1] - a[1])[0]?.[0]
-                      ?.charAt(0).toUpperCase() + 
-                    Object.entries(resumen.porCategoria)
-                      .sort((a, b) => b[1] - a[1])[0]?.[0]
-                      ?.slice(1) || '-'
-                  : '-'
-              } 
+            <MetricCard
+              label="Gastos variables"
+              value={formatMonto(resumen?.porTipo?.variable || 0)}
             />
           </div>
 
@@ -201,7 +232,7 @@ export default function Dashboard() {
                   <BarChart data={datosGrafico} layout="vertical">
                     <XAxis type="number" tickFormatter={(v) => `$${(v/1000).toFixed(0)}k`} />
                     <YAxis type="category" dataKey="name" width={100} />
-                    <Tooltip 
+                    <Tooltip
                       formatter={(value: number) => formatMonto(value)}
                       contentStyle={{
                         background: 'var(--bg-primary)',
@@ -227,8 +258,8 @@ export default function Dashboard() {
             border: '1px solid var(--border)',
             overflow: 'hidden',
           }}>
-            <div style={{ 
-              padding: '16px 20px', 
+            <div style={{
+              padding: '16px 20px',
               borderBottom: '1px solid var(--border)',
               display: 'flex',
               justifyContent: 'space-between',
@@ -241,17 +272,17 @@ export default function Dashboard() {
                 {gastos.length} registros
               </span>
             </div>
-            
+
             {gastos.length === 0 ? (
-              <div style={{ 
-                padding: '48px', 
-                textAlign: 'center', 
-                color: 'var(--text-secondary)' 
+              <div style={{
+                padding: '48px',
+                textAlign: 'center',
+                color: 'var(--text-secondary)'
               }}>
-                No hay gastos registrados este mes.
+                No hay gastos registrados en este período.
                 <br />
                 <span style={{ fontSize: '14px' }}>
-                  Mandá un mensaje al bot de Telegram para empezar.
+                  Mandá un mensaje al bot de Telegram o agregá uno manualmente.
                 </span>
               </div>
             ) : (
@@ -279,15 +310,30 @@ export default function Dashboard() {
                           {gasto.categoria.charAt(0).toUpperCase() + gasto.categoria.slice(1)}
                           {gasto.proveedor && ` · ${gasto.proveedor}`}
                           {' · '}
-                          {new Date(gasto.fecha).toLocaleDateString('es-AR', {
+                          {new Date(gasto.fecha + 'T12:00:00').toLocaleDateString('es-AR', {
                             day: 'numeric',
                             month: 'short',
                           })}
+                          {' · '}
+                          <span style={{
+                            fontSize: '11px',
+                            padding: '1px 6px',
+                            borderRadius: '8px',
+                            background: (gasto.tipo_gasto || 'variable') === 'fijo'
+                              ? 'rgba(25, 135, 84, 0.1)'
+                              : 'rgba(255, 193, 7, 0.15)',
+                            color: (gasto.tipo_gasto || 'variable') === 'fijo'
+                              ? 'var(--success)'
+                              : '#b8860b',
+                            fontWeight: 600,
+                          }}>
+                            {(gasto.tipo_gasto || 'variable') === 'fijo' ? 'Fijo' : 'Variable'}
+                          </span>
                         </p>
                       </div>
                     </div>
-                    <p style={{ 
-                      fontWeight: '500', 
+                    <p style={{
+                      fontWeight: '500',
                       color: 'var(--danger)',
                       whiteSpace: 'nowrap',
                     }}>
@@ -300,6 +346,18 @@ export default function Dashboard() {
           </div>
         </>
       )}
+
+      {/* Modal: Crear gasto */}
+      <ModalGasto
+        abierto={mostrarForm}
+        onCerrar={() => setMostrarForm(false)}
+        titulo="Agregar gasto"
+      >
+        <FormGasto
+          onGuardar={handleCrear}
+          onCancelar={() => setMostrarForm(false)}
+        />
+      </ModalGasto>
     </div>
   );
 }
@@ -312,10 +370,10 @@ function MetricCard({ label, value }: { label: string; value: string }) {
       padding: '16px 20px',
       border: '1px solid var(--border)',
     }}>
-      <p style={{ 
-        fontSize: '13px', 
-        color: 'var(--text-secondary)', 
-        marginBottom: '4px' 
+      <p style={{
+        fontSize: '13px',
+        color: 'var(--text-secondary)',
+        marginBottom: '4px'
       }}>
         {label}
       </p>

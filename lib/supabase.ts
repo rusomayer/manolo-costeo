@@ -1,5 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js';
-import { Gasto, GastoInput, ClaudeGastoResponse } from './types';
+import { Gasto, GastoInput, ClaudeGastoResponse, TipoGasto } from './types';
 
 function fechaLocal(timezone: string): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: timezone });
@@ -24,6 +24,7 @@ export async function guardarGasto(
       cantidad: gasto.cantidad || null,
       unidad: gasto.unidad || null,
       telegram_message_id: gasto.telegram_message_id || null,
+      tipo_gasto: gasto.tipo_gasto || 'variable',
       local_id: localId,
     }])
     .select()
@@ -75,33 +76,71 @@ export async function obtenerGastos(
 export async function obtenerResumen(
   client: SupabaseClient,
   localId: string,
-  mes?: string
+  filtros?: { desde?: string; hasta?: string; categoria?: string }
 ): Promise<{
   total: number;
   porCategoria: Record<string, number>;
+  porTipo: Record<string, number>;
   cantidad: number;
 }> {
-  const ahora = new Date();
-  const mesActual = mes || `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}`;
-
-  const desde = `${mesActual}-01`;
-  const hasta = `${mesActual}-31`;
-
-  const gastos = await obtenerGastos(client, localId, { desde, hasta });
+  const gastos = await obtenerGastos(client, localId, filtros);
 
   const porCategoria: Record<string, number> = {};
+  const porTipo: Record<string, number> = { fijo: 0, variable: 0 };
   let total = 0;
 
   for (const gasto of gastos) {
     total += Number(gasto.monto);
     porCategoria[gasto.categoria] = (porCategoria[gasto.categoria] || 0) + Number(gasto.monto);
+    const tipo = gasto.tipo_gasto || 'variable';
+    porTipo[tipo] = (porTipo[tipo] || 0) + Number(gasto.monto);
   }
 
   return {
     total,
     porCategoria,
+    porTipo,
     cantidad: gastos.length,
   };
+}
+
+export async function actualizarGasto(
+  client: SupabaseClient,
+  gastoId: string,
+  localId: string,
+  updates: Partial<GastoInput & { tipo_gasto?: TipoGasto }>
+): Promise<Gasto> {
+  const { data, error } = await client
+    .from('gastos')
+    .update(updates)
+    .eq('id', gastoId)
+    .eq('local_id', localId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error actualizando gasto:', error);
+    throw error;
+  }
+
+  return data;
+}
+
+export async function eliminarGasto(
+  client: SupabaseClient,
+  gastoId: string,
+  localId: string
+): Promise<void> {
+  const { error } = await client
+    .from('gastos')
+    .delete()
+    .eq('id', gastoId)
+    .eq('local_id', localId);
+
+  if (error) {
+    console.error('Error eliminando gasto:', error);
+    throw error;
+  }
 }
 
 // --- Gastos pendientes (follow-up questions) ---

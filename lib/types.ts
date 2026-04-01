@@ -1,4 +1,4 @@
-export type Categoria = 
+export type Categoria =
   | 'insumos'
   | 'servicios'
   | 'sueldos'
@@ -6,6 +6,8 @@ export type Categoria =
   | 'impuestos'
   | 'mantenimiento'
   | 'otros';
+
+export type TipoGasto = 'fijo' | 'variable';
 
 export interface Local {
   id: string;
@@ -52,6 +54,7 @@ export interface Gasto {
   telegram_message_id?: string;
   archivo_url?: string;
   local_id?: string;
+  tipo_gasto?: TipoGasto;
 }
 
 export interface GastoInput {
@@ -64,6 +67,7 @@ export interface GastoInput {
   fecha?: string;
   cantidad?: number;
   unidad?: string;
+  tipo_gasto?: TipoGasto;
 }
 
 export interface TelegramMessage {
@@ -128,6 +132,7 @@ export interface ClaudeGastoResponse {
   notas?: string;
   cantidad?: number;
   unidad?: string;
+  tipo_gasto?: TipoGasto;
   campos_faltantes?: {
     campo: 'cantidad_unidad' | 'fecha';
     pregunta: string;

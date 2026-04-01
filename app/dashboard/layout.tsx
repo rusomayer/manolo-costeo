@@ -90,6 +90,7 @@ export default async function DashboardLayout({
         </div>
         <div style={headerStyles.right}>
           <TelegramButton telegramLink={telegramLink} />
+          <a href="/dashboard/gastos" style={headerStyles.link}>Gastos</a>
           <a href="/dashboard/configuracion" style={headerStyles.link}>Config</a>
           <a href="/dashboard/invitar" style={headerStyles.link}>Invitar</a>
           <span style={headerStyles.email}>{user.email}</span>

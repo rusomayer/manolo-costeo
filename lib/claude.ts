@@ -33,8 +33,18 @@ RESPONDE SIEMPRE EN JSON con este formato exacto:
   "confianza": "alta/media/baja",
   "notas": "cualquier detalle adicional relevante",
   "cantidad": 5.0,
-  "unidad": "kg"
+  "unidad": "kg",
+  "tipo_gasto": "fijo o variable"
 }
+
+TIPO DE GASTO:
+- "fijo": gastos recurrentes mensuales que no cambian mucho: alquiler, sueldos, servicios (luz, gas, internet), impuestos, seguros
+- "variable": gastos que varían mes a mes: insumos, mantenimiento puntual, compras ocasionales
+- Si la categoría es "alquiler", "sueldos", o "impuestos", es casi seguro "fijo"
+- Si la categoría es "insumos", es casi seguro "variable"
+- "servicios" puede ser fijo (abono internet) o variable (consumo de luz), usá tu criterio
+- "mantenimiento" generalmente es "variable" salvo que sea un contrato mensual
+- Si no estás seguro, poné "variable"
 
 REGLAS:
 - El monto SIEMPRE debe ser un número positivo
