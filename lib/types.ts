@@ -9,6 +9,20 @@ export type Categoria =
 
 export type TipoGasto = 'fijo' | 'variable';
 
+export interface HorarioDia {
+  abierto: boolean;
+  abre: string;
+  cierra: string;
+}
+
+export type DiaSemana = 'lunes' | 'martes' | 'miercoles' | 'jueves' | 'viernes' | 'sabado' | 'domingo';
+export type Horarios = Record<DiaSemana, HorarioDia>;
+
+export interface RolEmpleado {
+  rol: string;
+  cantidad: number;
+}
+
 export interface Local {
   id: string;
   created_at: string;
@@ -17,6 +31,33 @@ export interface Local {
   owner_id: string;
   telegram_code: string;
   timezone: string;
+  // Mi Local - datos básicos
+  tipo_local?: string;
+  ubicacion_url?: string;
+  telefono?: string;
+  // Mi Local - espacio
+  superficie?: number;
+  cantidad_mesas?: number;
+  mesas_terraza?: number;
+  capacidad_personas?: number;
+  // Mi Local - operaciones
+  cantidad_turnos?: number;
+  empleados_por_turno?: number;
+  rotacion_mesa?: number;
+  roles_empleados?: RolEmpleado[];
+  horarios?: Horarios;
+  // Mi Local - costos fijos
+  alquiler_mensual?: number;
+  costo_luz?: number;
+  costo_gas?: number;
+  costo_agua?: number;
+  costo_internet?: number;
+  costo_seguro?: number;
+  costo_delivery_comision?: number;
+  // Mi Local - objetivos
+  ticket_promedio?: number;
+  food_cost_objetivo?: number;
+  meta_ventas_mensual?: number;
 }
 
 export interface LocalMember {

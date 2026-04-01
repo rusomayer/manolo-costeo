@@ -16,6 +16,7 @@ interface SidebarProps {
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: '📊' },
+  { href: '/dashboard/mi-local', label: 'Mi Local', icon: '🏪' },
   { href: '/dashboard/gastos', label: 'Gastos', icon: '💰' },
   { href: '/dashboard/proveedores', label: 'Proveedores', icon: '🏪' },
   { href: '/dashboard/recetas', label: 'Recetas', icon: '🍳' },
