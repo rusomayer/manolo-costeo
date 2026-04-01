@@ -69,6 +69,7 @@ export default async function DashboardLayout({
 
   const botUsername = process.env.NEXT_PUBLIC_BOT_USERNAME || 'manolocosteo_bot';
   const telegramLink = `https://t.me/${botUsername}?start=${selectedLocal.telegram_code}`;
+  const twiioCode = (selectedLocal as any).twilio_code;
 
   return (
     <div className="dashboard-layout">
@@ -77,6 +78,7 @@ export default async function DashboardLayout({
         selectedLocal={selectedLocal}
         userEmail={user.email || ''}
         telegramLink={telegramLink}
+        twiioCode={twiioCode}
         signOutAction={signOut}
       />
       <main className="dashboard-main">

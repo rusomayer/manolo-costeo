@@ -10,6 +10,7 @@ interface SidebarProps {
   selectedLocal: Local & { rol: string };
   userEmail: string;
   telegramLink: string;
+  twiioCode?: string;
   signOutAction: () => Promise<void>;
 }
 
@@ -23,7 +24,7 @@ const NAV_ITEMS = [
   { href: '/dashboard/configuracion', label: 'Configuración', icon: '⚙️' },
 ];
 
-export default function Sidebar({ locales, selectedLocal, userEmail, telegramLink, signOutAction }: SidebarProps) {
+export default function Sidebar({ locales, selectedLocal, userEmail, telegramLink, twiioCode, signOutAction }: SidebarProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -82,7 +83,7 @@ export default function Sidebar({ locales, selectedLocal, userEmail, telegramLin
       {/* Bottom: Telegram + User */}
       <div style={styles.bottomSection}>
         <div style={styles.telegramRow}>
-          <TelegramButton telegramLink={telegramLink} />
+          <TelegramButton telegramLink={telegramLink} twiioCode={twiioCode} />
         </div>
         <div style={styles.userSection}>
           <div style={styles.userEmail} title={userEmail}>
