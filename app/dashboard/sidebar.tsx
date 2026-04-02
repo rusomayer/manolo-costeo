@@ -48,8 +48,8 @@ export default function Sidebar({ locales, selectedLocal, userEmail, telegramLin
           <Image
             src="/logo.png"
             alt="Manolo"
-            width={120}
-            height={48}
+            width={180}
+            height={72}
             style={{ objectFit: 'contain', objectPosition: 'left' }}
             priority
           />
