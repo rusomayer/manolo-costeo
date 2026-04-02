@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { Gasto, GastoInput, TipoGasto } from '@/lib/types';
+import { createClient } from '@/lib/supabase/client';
 import FiltroFechas from './components/FiltroFechas';
 import ModalGasto from './components/ModalGasto';
 import FormGasto from './components/FormGasto';
@@ -43,6 +44,17 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [filtroCategoria, setFiltroCategoria] = useState<string>('');
   const [mostrarForm, setMostrarForm] = useState(false);
+  const [nombreLocal, setNombreLocal] = useState<string>('');
+
+  const supabase = createClient();
+
+  useEffect(() => {
+    const localId = document.cookie.split(';').find(c => c.trim().startsWith('selected_local='))?.split('=')[1]?.trim();
+    if (!localId) return;
+    supabase.from('locales').select('nombre').eq('id', localId).single().then(({ data }) => {
+      if (data?.nombre) setNombreLocal(data.nombre);
+    });
+  }, []);
 
   const [desde, setDesde] = useState(() => {
     const d = new Date();
@@ -138,7 +150,7 @@ export default function Dashboard() {
       }}>
         <div>
           <h1 style={{ fontSize: '28px', fontWeight: '600', marginBottom: '4px' }}>
-            ☕ Gastos del Café
+            {nombreLocal || '☕ Mi Local'}
           </h1>
           <p style={{ color: 'var(--text-secondary)' }}>
             {periodoLabel.charAt(0).toUpperCase() + periodoLabel.slice(1)}
