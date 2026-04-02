@@ -111,8 +111,19 @@ export async function POST(request: NextRequest) {
           await procesarMensajeTextoTwilio(db, messageBody, phoneNumber);
         }
       } else if (numMedia > 0) {
-        // Para Twilio Sandbox, no podemos procesar medias fácilmente
-        await enviarMensajeTwilio(phoneNumber, '📸 Por ahora en testing solo puedo procesar texto. Escribí el gasto como:\n"Leche 20L $18.000"');
+        const mediaUrl = formData.get('MediaUrl0') as string;
+        const mediaContentType = (formData.get('MediaContentType0') as string) || '';
+        const caption = messageBody || undefined;
+
+        if (mediaContentType.startsWith('image/')) {
+          await procesarImagenTwilio(db, mediaUrl, mediaContentType, caption, phoneNumber);
+        } else if (mediaContentType === 'application/pdf') {
+          await procesarPDFTwilio(db, mediaUrl, phoneNumber);
+        } else if (mediaContentType.startsWith('audio/')) {
+          await procesarVozTwilio(db, mediaUrl, phoneNumber);
+        } else {
+          await enviarMensajeTwilio(phoneNumber, '🤔 No entendí ese tipo de archivo. Podés mandar texto, foto de factura, PDF o audio.');
+        }
       } else {
         await enviarMensajeTwilio(phoneNumber, '🤔 No entendí ese tipo de mensaje.');
       }
@@ -270,6 +281,106 @@ async function preguntarSiFaltaTwilio(
   });
 
   return true;
+}
+
+async function descargarMediaTwilio(mediaUrl: string): Promise<{ buffer: Buffer; mimeType: string }> {
+  const auth = Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString('base64');
+  const response = await fetch(mediaUrl, {
+    headers: { 'Authorization': `Basic ${auth}` },
+  });
+  if (!response.ok) throw new Error(`Error descargando media: ${response.status}`);
+  const arrayBuffer = await response.arrayBuffer();
+  const mimeType = response.headers.get('content-type') || 'application/octet-stream';
+  return { buffer: Buffer.from(arrayBuffer), mimeType };
+}
+
+async function procesarImagenTwilio(
+  db: DB,
+  mediaUrl: string,
+  mediaContentType: string,
+  caption: string | undefined,
+  phoneNumber: string
+) {
+  const info = await obtenerLocalInfoTwilio(db, phoneNumber);
+  if (!info) {
+    await enviarMensajeTwilio(phoneNumber, '⚠️ Este número no está vinculado a ningún local.');
+    return;
+  }
+
+  await enviarMensajeTwilio(phoneNumber, '📸 Analizando la imagen...');
+
+  const { buffer } = await descargarMediaTwilio(mediaUrl);
+  const mimeType = mediaContentType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+  const resultado = await procesarImagen(buffer, mimeType, caption, info.timezone);
+
+  if (resultado.monto === 0) {
+    await enviarMensajeTwilio(phoneNumber, '🤔 No pude leer bien la factura. ¿Podés mandarla con mejor luz o escribir el monto?');
+    return;
+  }
+
+  if (await preguntarSiFaltaTwilio(db, resultado, phoneNumber, info.localId)) return;
+
+  const gastoGuardado = await guardarGasto(db, { ...resultado }, info.localId, info.timezone);
+  await autoRegistrarPrecio(db, { ...resultado, fecha: gastoGuardado.fecha, categoria: resultado.categoria }, info.localId);
+  await enviarMensajeTwilio(phoneNumber, formatearRespuesta(resultado));
+}
+
+async function procesarPDFTwilio(db: DB, mediaUrl: string, phoneNumber: string) {
+  const info = await obtenerLocalInfoTwilio(db, phoneNumber);
+  if (!info) {
+    await enviarMensajeTwilio(phoneNumber, '⚠️ Este número no está vinculado a ningún local.');
+    return;
+  }
+
+  await enviarMensajeTwilio(phoneNumber, '📄 Analizando el PDF...');
+
+  const { buffer } = await descargarMediaTwilio(mediaUrl);
+  const resultado = await procesarPDF(buffer, undefined, info.timezone);
+
+  if (resultado.monto === 0) {
+    await enviarMensajeTwilio(phoneNumber, '🤔 No pude extraer datos del PDF. ¿Podés escribir el monto manualmente?');
+    return;
+  }
+
+  if (await preguntarSiFaltaTwilio(db, resultado, phoneNumber, info.localId)) return;
+
+  const gastoGuardado = await guardarGasto(db, { ...resultado }, info.localId, info.timezone);
+  await autoRegistrarPrecio(db, { ...resultado, fecha: gastoGuardado.fecha, categoria: resultado.categoria }, info.localId);
+  await enviarMensajeTwilio(phoneNumber, formatearRespuesta(resultado));
+}
+
+async function procesarVozTwilio(db: DB, mediaUrl: string, phoneNumber: string) {
+  const info = await obtenerLocalInfoTwilio(db, phoneNumber);
+  if (!info) {
+    await enviarMensajeTwilio(phoneNumber, '⚠️ Este número no está vinculado a ningún local.');
+    return;
+  }
+
+  await enviarMensajeTwilio(phoneNumber, '🎤 Transcribiendo audio...');
+
+  const { buffer } = await descargarMediaTwilio(mediaUrl);
+  const transcripcion = await transcribirAudio(buffer);
+
+  const intencion = await clasificarIntencion(transcripcion);
+
+  if (intencion === 'consulta') {
+    const respuesta = await consultaManolo(db, info.localId, transcripcion);
+    await enviarMensajeTwilio(phoneNumber, `🎤 Escuché: "${transcripcion}"\n\n🤖 Manolo dice:\n\n${respuesta}`);
+    return;
+  }
+
+  const resultado = await procesarAudio(transcripcion, info.timezone);
+
+  if (resultado.monto === 0 || resultado.confianza === 'baja') {
+    await enviarMensajeTwilio(phoneNumber, `🎤 Escuché: "${transcripcion}"\n\n🤔 No pude identificar un gasto claro. ¿Podés repetirlo o escribirlo?`);
+    return;
+  }
+
+  if (await preguntarSiFaltaTwilio(db, resultado, phoneNumber, info.localId)) return;
+
+  const gastoGuardado = await guardarGasto(db, { ...resultado }, info.localId, info.timezone);
+  await autoRegistrarPrecio(db, { ...resultado, fecha: gastoGuardado.fecha, categoria: resultado.categoria }, info.localId);
+  await enviarMensajeTwilio(phoneNumber, `🎤 Escuché: "${transcripcion}"\n\n${formatearRespuesta(resultado)}`);
 }
 
 function formatearRespuesta(gasto: {
