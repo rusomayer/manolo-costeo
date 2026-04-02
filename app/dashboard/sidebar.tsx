@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import Image from 'next/image';
 import {
@@ -12,6 +12,8 @@ import {
   BarChart2,
   Bot,
   Settings,
+  ChevronDown,
+  Plus,
   type LucideIcon,
 } from 'lucide-react';
 import { Local } from '@/lib/types';
@@ -46,45 +48,98 @@ const NAV_ITEMS: NavItem[] = [
 export default function Sidebar({ locales, selectedLocal, userEmail, telegramLink, twiioCode, signOutAction }: SidebarProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [localMenuOpen, setLocalMenuOpen] = useState(false);
+  const localMenuRef = useRef<HTMLDivElement>(null);
 
   function isActive(href: string) {
     if (href === '/dashboard') return pathname === '/dashboard';
     return pathname.startsWith(href);
   }
 
-  function handleLocalChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    document.cookie = `selected_local=${e.target.value};path=/;max-age=31536000`;
+  function handleLocalChange(localId: string) {
+    document.cookie = `selected_local=${localId};path=/;max-age=31536000`;
     window.location.reload();
   }
 
+  // Cierra el menú al click fuera
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (localMenuRef.current && !localMenuRef.current.contains(e.target as Node)) {
+        setLocalMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const sidebarContent = (
     <>
-      {/* Logo + Local */}
+      {/* Logo */}
       <div style={styles.logoSection}>
-        <div style={styles.logoRow}>
-          <Image
-            src="/logo.png"
-            alt="Manolo"
-            width={180}
-            height={72}
-            style={{ objectFit: 'contain', objectPosition: 'left' }}
-            priority
+        <Image
+          src="/logo.png"
+          alt="Manolo"
+          width={180}
+          height={72}
+          style={{ objectFit: 'contain', objectPosition: 'left' }}
+          priority
+        />
+      </div>
+
+      {/* Local selector */}
+      <div style={styles.localSection} ref={localMenuRef}>
+        <button
+          onClick={() => setLocalMenuOpen(prev => !prev)}
+          style={styles.localBtn}
+        >
+          <div style={styles.localBtnInner}>
+            <span style={styles.localBtnDot} />
+            <span style={styles.localBtnName}>{selectedLocal.nombre}</span>
+          </div>
+          <ChevronDown
+            size={14}
+            style={{
+              flexShrink: 0,
+              color: 'var(--text-muted)',
+              transform: localMenuOpen ? 'rotate(180deg)' : 'rotate(0)',
+              transition: 'transform 0.2s',
+            }}
           />
-        </div>
-        <div style={styles.localSelector}>
-          <div style={styles.localName}>{selectedLocal.nombre}</div>
-          {locales.length > 1 && (
-            <select
-              style={styles.localSelect}
-              defaultValue={selectedLocal.id}
-              onChange={handleLocalChange}
-            >
-              {locales.map((l) => (
-                <option key={l.id} value={l.id}>{l.nombre}</option>
-              ))}
-            </select>
-          )}
-        </div>
+        </button>
+
+        {localMenuOpen && (
+          <div style={styles.localDropdown}>
+            {locales.map((l) => (
+              <button
+                key={l.id}
+                onClick={() => { handleLocalChange(l.id); setLocalMenuOpen(false); }}
+                style={{
+                  ...styles.localDropdownItem,
+                  ...(l.id === selectedLocal.id ? styles.localDropdownItemActive : {}),
+                }}
+              >
+                <span style={{
+                  ...styles.localBtnDot,
+                  background: l.id === selectedLocal.id ? 'var(--accent)' : 'var(--border)',
+                }} />
+                {l.nombre}
+                {l.id === selectedLocal.id && (
+                  <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--accent)', fontWeight: 600 }}>activo</span>
+                )}
+              </button>
+            ))}
+            <div style={{ borderTop: '1px solid var(--border)', marginTop: 4, paddingTop: 4 }}>
+              <a
+                href="/dashboard/nuevo-local"
+                style={styles.localDropdownAdd}
+                onClick={() => setLocalMenuOpen(false)}
+              >
+                <Plus size={13} />
+                Agregar local
+              </a>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Nav Links */}
@@ -199,36 +254,91 @@ const styles: Record<string, React.CSSProperties> = {
     lineHeight: 1,
   },
   logoSection: {
-    padding: '20px 16px 16px',
-    borderBottom: '1px solid var(--border)',
+    padding: '20px 16px 12px',
   },
-  logoRow: {
+  localSection: {
+    padding: '0 12px 12px',
+    borderBottom: '1px solid var(--border)',
+    position: 'relative',
+  },
+  localBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    padding: '8px 10px',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius-sm)',
+    background: 'var(--bg-secondary)',
+    cursor: 'pointer',
+    gap: 8,
+  },
+  localBtnInner: {
     display: 'flex',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 12,
+    minWidth: 0,
   },
-  logoText: {
-    fontSize: 15,
-    fontWeight: 700,
-    color: 'var(--text-primary)',
-  },
-  localSelector: {},
-  localName: {
+  localBtnDot: {
+    width: 8,
+    height: 8,
+    borderRadius: '50%',
+    background: 'var(--accent)',
+    flexShrink: 0,
+  } as React.CSSProperties,
+  localBtnName: {
     fontSize: 13,
     fontWeight: 600,
-    color: 'var(--accent)',
-    marginBottom: 4,
-  },
-  localSelect: {
-    width: '100%',
-    fontSize: 12,
-    padding: '4px 8px',
-    border: '1px solid var(--border)',
-    borderRadius: 4,
-    background: 'var(--bg-secondary)',
     color: 'var(--text-primary)',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  } as React.CSSProperties,
+  localDropdown: {
+    position: 'absolute',
+    top: 'calc(100% - 4px)',
+    left: 12,
+    right: 12,
+    background: 'var(--bg-primary)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius-sm)',
+    boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+    zIndex: 200,
+    padding: 4,
+  } as React.CSSProperties,
+  localDropdownItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    width: '100%',
+    padding: '8px 10px',
+    border: 'none',
+    borderRadius: 4,
+    background: 'transparent',
+    cursor: 'pointer',
+    fontSize: 13,
+    color: 'var(--text-primary)',
+    textAlign: 'left' as const,
   },
+  localDropdownItemActive: {
+    background: 'var(--bg-secondary)',
+    fontWeight: 600,
+  },
+  localDropdownAdd: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    width: '100%',
+    padding: '8px 10px',
+    border: 'none',
+    borderRadius: 4,
+    background: 'transparent',
+    cursor: 'pointer',
+    fontSize: 12,
+    color: 'var(--accent)',
+    fontWeight: 500,
+    textDecoration: 'none',
+  } as React.CSSProperties,
   nav: {
     flex: 1,
     padding: '12px 8px',
