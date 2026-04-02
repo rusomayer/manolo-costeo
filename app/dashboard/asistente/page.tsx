@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { createClient } from '@/lib/supabase/client';
+import TelegramButton from '../telegram-button';
 
 interface Mensaje {
   role: 'user' | 'assistant';
@@ -16,18 +18,40 @@ const SUGERENCIAS = [
   '¿Cuánto gasté en insumos este mes?',
 ];
 
+function getLocalId() {
+  if (typeof document === 'undefined') return '';
+  return document.cookie.split(';').find(c => c.trim().startsWith('selected_local='))?.split('=')[1]?.trim() || '';
+}
+
 export default function AsistentePage() {
   const [mensajes, setMensajes] = useState<Mensaje[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [telegramLink, setTelegramLink] = useState('');
+  const [twiioCode, setTwiioCode] = useState('');
   const chatRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const supabase = createClient();
 
   useEffect(() => {
     if (chatRef.current) {
       chatRef.current.scrollTop = chatRef.current.scrollHeight;
     }
   }, [mensajes]);
+
+  useEffect(() => {
+    async function loadLocal() {
+      const localId = getLocalId();
+      if (!localId) return;
+      const { data } = await supabase.from('locales').select('telegram_code, twilio_code').eq('id', localId).single();
+      if (data) {
+        const botUsername = process.env.NEXT_PUBLIC_BOT_USERNAME || 'manolocosteo_bot';
+        setTelegramLink(`https://t.me/${botUsername}?start=${data.telegram_code}`);
+        setTwiioCode(data.twilio_code || '');
+      }
+    }
+    loadLocal();
+  }, []);
 
   async function enviar(texto?: string) {
     const msg = texto || input.trim();
@@ -76,6 +100,34 @@ export default function AsistentePage() {
           Preguntale sobre tus costos, precios, gastos y recetas. Manolo consulta tu base de datos para darte respuestas con datos reales.
         </p>
       </header>
+
+      {/* Banner conectar */}
+      {telegramLink && (
+        <div style={{
+          background: 'var(--bg-secondary)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius)',
+          padding: '14px 18px',
+          marginBottom: 16,
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 16,
+          flexWrap: 'wrap',
+        }}>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>
+              Cargá gastos desde tu celular
+            </p>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              Conectá Manolo a WhatsApp o Telegram y registrá gastos con un mensaje.
+            </p>
+          </div>
+          <div style={{ flexShrink: 0 }}>
+            <TelegramButton telegramLink={telegramLink} twiioCode={twiioCode} />
+          </div>
+        </div>
+      )}
 
       {/* Chat area */}
       <div

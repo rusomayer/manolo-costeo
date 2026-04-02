@@ -39,7 +39,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/dashboard',               label: 'Dashboard',    icon: LayoutDashboard },
   { href: '/dashboard/mi-local',      label: 'Mi Local',     icon: Store           },
   { href: '/dashboard/gastos',        label: 'Gastos',       icon: Receipt         },
-  { href: '/dashboard/asistente',     label: 'Manolo',       icon: Bot             },
+  { href: '/dashboard/asistente',     label: 'Asistente IA', icon: Bot             },
   { href: '/dashboard/proveedores',   label: 'Proveedores',  icon: Truck           },
   { href: '/dashboard/recetas',       label: 'Recetas',      icon: ChefHat         },
   { href: '/dashboard/reportes',      label: 'Reportes',     icon: BarChart2       },
