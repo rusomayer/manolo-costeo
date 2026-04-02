@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { usePathname } from 'next/navigation';
+import Image from 'next/image';
 import { Local } from '@/lib/types';
 import TelegramButton from './telegram-button';
 
@@ -44,8 +45,14 @@ export default function Sidebar({ locales, selectedLocal, userEmail, telegramLin
       {/* Logo + Local */}
       <div style={styles.logoSection}>
         <div style={styles.logoRow}>
-          <span style={{ fontSize: 22 }}>☕</span>
-          <span style={styles.logoText}>Manolo Costeo</span>
+          <Image
+            src="/logo.png"
+            alt="Manolo"
+            width={120}
+            height={48}
+            style={{ objectFit: 'contain', objectPosition: 'left' }}
+            priority
+          />
         </div>
         <div style={styles.localSelector}>
           <div style={styles.localName}>{selectedLocal.nombre}</div>
