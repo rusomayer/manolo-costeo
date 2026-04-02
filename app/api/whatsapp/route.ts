@@ -240,14 +240,16 @@ async function procesarFotoWA(db: DB, message: WhatsAppMessage, phoneNumber: str
   await enviarMensajeWA(PHONE_NUMBER_ID, ACCESS_TOKEN, phoneNumber, '📸 Analizando la imagen...');
 
   const { buffer, mimeType } = await obtenerArchivoWA(ACCESS_TOKEN, message.image!.id);
-  const resultado = await procesarImagen(
+  const resultados = await procesarImagen(
     buffer,
     mimeType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
     undefined,
     info.timezone
   );
 
-  if (resultado.monto === 0) {
+  const validResults = resultados.filter(r => r.monto > 0);
+
+  if (validResults.length === 0) {
     await enviarMensajeWA(
       PHONE_NUMBER_ID,
       ACCESS_TOKEN,
@@ -257,20 +259,41 @@ async function procesarFotoWA(db: DB, message: WhatsAppMessage, phoneNumber: str
     return;
   }
 
-  if (await preguntarSiFaltaWA(db, resultado, phoneNumber, info.localId)) return;
+  if (validResults.length === 1) {
+    const resultado = validResults[0];
+    if (await preguntarSiFaltaWA(db, resultado, phoneNumber, info.localId)) return;
+    const gastoGuardado = await guardarGasto(
+      db,
+      { ...resultado, telegram_message_id: message.id },
+      info.localId,
+      info.timezone
+    );
+    await autoRegistrarPrecio(
+      db,
+      { ...resultado, fecha: gastoGuardado.fecha, categoria: resultado.categoria },
+      info.localId
+    );
+    await enviarMensajeWA(PHONE_NUMBER_ID, ACCESS_TOKEN, phoneNumber, formatearRespuesta(resultado));
+    return;
+  }
 
-  const gastoGuardado = await guardarGasto(
-    db,
-    { ...resultado, telegram_message_id: message.id },
-    info.localId,
-    info.timezone
-  );
-  await autoRegistrarPrecio(
-    db,
-    { ...resultado, fecha: gastoGuardado.fecha, categoria: resultado.categoria },
-    info.localId
-  );
-  await enviarMensajeWA(PHONE_NUMBER_ID, ACCESS_TOKEN, phoneNumber, formatearRespuesta(resultado));
+  let totalMonto = 0;
+  for (const resultado of validResults) {
+    const gastoGuardado = await guardarGasto(
+      db,
+      { ...resultado, telegram_message_id: message.id },
+      info.localId,
+      info.timezone
+    );
+    await autoRegistrarPrecio(
+      db,
+      { ...resultado, fecha: gastoGuardado.fecha, categoria: resultado.categoria },
+      info.localId
+    );
+    totalMonto += resultado.monto;
+  }
+
+  await enviarMensajeWA(PHONE_NUMBER_ID, ACCESS_TOKEN, phoneNumber, formatearRespuestaMultiple(validResults, totalMonto));
 }
 
 async function procesarDocumentoWA(db: DB, message: WhatsAppMessage, phoneNumber: string) {
@@ -294,9 +317,11 @@ async function procesarDocumentoWA(db: DB, message: WhatsAppMessage, phoneNumber
   await enviarMensajeWA(PHONE_NUMBER_ID, ACCESS_TOKEN, phoneNumber, '📄 Analizando el PDF...');
 
   const { buffer } = await obtenerArchivoWA(ACCESS_TOKEN, doc.id);
-  const resultado = await procesarPDF(buffer, doc.filename, info.timezone);
+  const resultados = await procesarPDF(buffer, doc.filename, info.timezone);
 
-  if (resultado.monto === 0) {
+  const validResults = resultados.filter(r => r.monto > 0);
+
+  if (validResults.length === 0) {
     await enviarMensajeWA(
       PHONE_NUMBER_ID,
       ACCESS_TOKEN,
@@ -306,20 +331,41 @@ async function procesarDocumentoWA(db: DB, message: WhatsAppMessage, phoneNumber
     return;
   }
 
-  if (await preguntarSiFaltaWA(db, resultado, phoneNumber, info.localId)) return;
+  if (validResults.length === 1) {
+    const resultado = validResults[0];
+    if (await preguntarSiFaltaWA(db, resultado, phoneNumber, info.localId)) return;
+    const gastoGuardado = await guardarGasto(
+      db,
+      { ...resultado, telegram_message_id: message.id },
+      info.localId,
+      info.timezone
+    );
+    await autoRegistrarPrecio(
+      db,
+      { ...resultado, fecha: gastoGuardado.fecha, categoria: resultado.categoria },
+      info.localId
+    );
+    await enviarMensajeWA(PHONE_NUMBER_ID, ACCESS_TOKEN, phoneNumber, formatearRespuesta(resultado));
+    return;
+  }
 
-  const gastoGuardado = await guardarGasto(
-    db,
-    { ...resultado, telegram_message_id: message.id },
-    info.localId,
-    info.timezone
-  );
-  await autoRegistrarPrecio(
-    db,
-    { ...resultado, fecha: gastoGuardado.fecha, categoria: resultado.categoria },
-    info.localId
-  );
-  await enviarMensajeWA(PHONE_NUMBER_ID, ACCESS_TOKEN, phoneNumber, formatearRespuesta(resultado));
+  let totalMonto = 0;
+  for (const resultado of validResults) {
+    const gastoGuardado = await guardarGasto(
+      db,
+      { ...resultado, telegram_message_id: message.id },
+      info.localId,
+      info.timezone
+    );
+    await autoRegistrarPrecio(
+      db,
+      { ...resultado, fecha: gastoGuardado.fecha, categoria: resultado.categoria },
+      info.localId
+    );
+    totalMonto += resultado.monto;
+  }
+
+  await enviarMensajeWA(PHONE_NUMBER_ID, ACCESS_TOKEN, phoneNumber, formatearRespuestaMultiple(validResults, totalMonto));
 }
 
 async function procesarVozWA(db: DB, message: WhatsAppMessage, phoneNumber: string) {
@@ -450,5 +496,38 @@ function formatearRespuesta(gasto: {
     respuesta += `\n\n⚠️ <i>No estoy 100% seguro de estos datos. Revisalos en el dashboard.</i>`;
   }
 
+  return respuesta;
+}
+
+function formatearRespuestaMultiple(gastos: {
+  descripcion: string;
+  monto: number;
+  categoria: string;
+  proveedor?: string;
+  cantidad?: number;
+  unidad?: string;
+}[], totalMonto: number): string {
+  const categoriaEmoji: Record<string, string> = {
+    insumos: '☕', servicios: '💡', sueldos: '👤', alquiler: '🏠',
+    impuestos: '📋', mantenimiento: '🔧', otros: '📦',
+  };
+
+  const fmt = (n: number) => new Intl.NumberFormat('es-AR', {
+    style: 'currency', currency: 'ARS', minimumFractionDigits: 0,
+  }).format(n);
+
+  let respuesta = `✅ *${gastos.length} items registrados*\n`;
+  if (gastos[0]?.proveedor) {
+    respuesta += `🏪 ${gastos[0].proveedor}\n`;
+  }
+  respuesta += `\n`;
+
+  for (const g of gastos) {
+    const emoji = categoriaEmoji[g.categoria] || '📦';
+    const cant = g.cantidad && g.unidad ? ` (${g.cantidad} ${g.unidad})` : '';
+    respuesta += `${emoji} ${g.descripcion}${cant} — ${fmt(g.monto)}\n`;
+  }
+
+  respuesta += `\n💰 *Total: ${fmt(totalMonto)}*`;
   return respuesta;
 }

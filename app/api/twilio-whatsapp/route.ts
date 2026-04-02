@@ -311,18 +311,31 @@ async function procesarImagenTwilio(
 
   const { buffer } = await descargarMediaTwilio(mediaUrl);
   const mimeType = mediaContentType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
-  const resultado = await procesarImagen(buffer, mimeType, caption, info.timezone);
+  const resultados = await procesarImagen(buffer, mimeType, caption, info.timezone);
 
-  if (resultado.monto === 0) {
+  const validResults = resultados.filter(r => r.monto > 0);
+
+  if (validResults.length === 0) {
     await enviarMensajeTwilio(phoneNumber, '🤔 No pude leer bien la factura. ¿Podés mandarla con mejor luz o escribir el monto?');
     return;
   }
 
-  if (await preguntarSiFaltaTwilio(db, resultado, phoneNumber, info.localId)) return;
+  if (validResults.length === 1) {
+    const resultado = validResults[0];
+    if (await preguntarSiFaltaTwilio(db, resultado, phoneNumber, info.localId)) return;
+    const gastoGuardado = await guardarGasto(db, { ...resultado }, info.localId, info.timezone);
+    await autoRegistrarPrecio(db, { ...resultado, fecha: gastoGuardado.fecha, categoria: resultado.categoria }, info.localId);
+    await enviarMensajeTwilio(phoneNumber, formatearRespuesta(resultado));
+    return;
+  }
 
-  const gastoGuardado = await guardarGasto(db, { ...resultado }, info.localId, info.timezone);
-  await autoRegistrarPrecio(db, { ...resultado, fecha: gastoGuardado.fecha, categoria: resultado.categoria }, info.localId);
-  await enviarMensajeTwilio(phoneNumber, formatearRespuesta(resultado));
+  let totalMonto = 0;
+  for (const resultado of validResults) {
+    const gastoGuardado = await guardarGasto(db, { ...resultado }, info.localId, info.timezone);
+    await autoRegistrarPrecio(db, { ...resultado, fecha: gastoGuardado.fecha, categoria: resultado.categoria }, info.localId);
+    totalMonto += resultado.monto;
+  }
+  await enviarMensajeTwilio(phoneNumber, formatearRespuestaMultiple(validResults, totalMonto));
 }
 
 async function procesarPDFTwilio(db: DB, mediaUrl: string, phoneNumber: string) {
@@ -335,18 +348,31 @@ async function procesarPDFTwilio(db: DB, mediaUrl: string, phoneNumber: string) 
   await enviarMensajeTwilio(phoneNumber, '📄 Analizando el PDF...');
 
   const { buffer } = await descargarMediaTwilio(mediaUrl);
-  const resultado = await procesarPDF(buffer, undefined, info.timezone);
+  const resultados = await procesarPDF(buffer, undefined, info.timezone);
 
-  if (resultado.monto === 0) {
+  const validResults = resultados.filter(r => r.monto > 0);
+
+  if (validResults.length === 0) {
     await enviarMensajeTwilio(phoneNumber, '🤔 No pude extraer datos del PDF. ¿Podés escribir el monto manualmente?');
     return;
   }
 
-  if (await preguntarSiFaltaTwilio(db, resultado, phoneNumber, info.localId)) return;
+  if (validResults.length === 1) {
+    const resultado = validResults[0];
+    if (await preguntarSiFaltaTwilio(db, resultado, phoneNumber, info.localId)) return;
+    const gastoGuardado = await guardarGasto(db, { ...resultado }, info.localId, info.timezone);
+    await autoRegistrarPrecio(db, { ...resultado, fecha: gastoGuardado.fecha, categoria: resultado.categoria }, info.localId);
+    await enviarMensajeTwilio(phoneNumber, formatearRespuesta(resultado));
+    return;
+  }
 
-  const gastoGuardado = await guardarGasto(db, { ...resultado }, info.localId, info.timezone);
-  await autoRegistrarPrecio(db, { ...resultado, fecha: gastoGuardado.fecha, categoria: resultado.categoria }, info.localId);
-  await enviarMensajeTwilio(phoneNumber, formatearRespuesta(resultado));
+  let totalMonto = 0;
+  for (const resultado of validResults) {
+    const gastoGuardado = await guardarGasto(db, { ...resultado }, info.localId, info.timezone);
+    await autoRegistrarPrecio(db, { ...resultado, fecha: gastoGuardado.fecha, categoria: resultado.categoria }, info.localId);
+    totalMonto += resultado.monto;
+  }
+  await enviarMensajeTwilio(phoneNumber, formatearRespuestaMultiple(validResults, totalMonto));
 }
 
 async function procesarVozTwilio(db: DB, mediaUrl: string, phoneNumber: string) {
@@ -433,5 +459,38 @@ function formatearRespuesta(gasto: {
     respuesta += `\n🏪 ${gasto.proveedor}`;
   }
 
+  return respuesta;
+}
+
+function formatearRespuestaMultiple(gastos: {
+  descripcion: string;
+  monto: number;
+  categoria: string;
+  proveedor?: string;
+  cantidad?: number;
+  unidad?: string;
+}[], totalMonto: number): string {
+  const categoriaEmoji: Record<string, string> = {
+    insumos: '☕', servicios: '💡', sueldos: '👤', alquiler: '🏠',
+    impuestos: '📋', mantenimiento: '🔧', otros: '📦',
+  };
+
+  const fmt = (n: number) => new Intl.NumberFormat('es-AR', {
+    style: 'currency', currency: 'ARS', minimumFractionDigits: 0,
+  }).format(n);
+
+  let respuesta = `✅ ${gastos.length} items registrados\n`;
+  if (gastos[0]?.proveedor) {
+    respuesta += `🏪 ${gastos[0].proveedor}\n`;
+  }
+  respuesta += `\n`;
+
+  for (const g of gastos) {
+    const emoji = categoriaEmoji[g.categoria] || '📦';
+    const cant = g.cantidad && g.unidad ? ` (${g.cantidad} ${g.unidad})` : '';
+    respuesta += `${emoji} ${g.descripcion}${cant} — ${fmt(g.monto)}\n`;
+  }
+
+  respuesta += `\n💰 Total: ${fmt(totalMonto)}`;
   return respuesta;
 }

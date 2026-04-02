@@ -78,6 +78,66 @@ Formato del campo:
 "campos_faltantes": [{"campo": "cantidad_unidad", "pregunta": "¿Cuántos kg/litros/unidades compraste?"}]`;
 }
 
+function getSystemPromptTicket(timezone?: string) {
+  const tz = timezone || 'America/Buenos_Aires';
+  const hoy = new Date().toLocaleDateString('en-CA', { timeZone: tz });
+  const diaSemana = new Date().toLocaleDateString('es-AR', { timeZone: tz, weekday: 'long' });
+  return `Sos un asistente que ayuda a registrar gastos de un café/bar.
+Tu trabajo es extraer CADA LÍNEA/ITEM de un ticket, factura o imagen y devolver un ARRAY JSON con todos los items.
+
+HOY es ${diaSemana} ${hoy}. Usa esta fecha para interpretar referencias como "ayer", "el lunes", "la semana pasada", etc.
+
+CATEGORÍAS VÁLIDAS:
+- insumos: café, leche, azúcar, medialunas, ingredientes, alimentos, bebidas, productos de supermercado
+- servicios: luz, gas, agua, internet, teléfono
+- sueldos: pagos a empleados, cargas sociales
+- alquiler: alquiler del local, expensas
+- impuestos: IIBB, monotributo, tasas municipales
+- mantenimiento: reparaciones, limpieza, insumos de limpieza
+- otros: todo lo que no entre en las anteriores
+
+RESPONDE SIEMPRE EN JSON como un ARRAY de objetos, uno por cada item/producto del ticket:
+[
+  {
+    "descripcion": "descripción corta del item",
+    "monto": 12345.00,
+    "categoria": "insumos",
+    "proveedor": "nombre del comercio/proveedor del ticket",
+    "fecha": "fecha del ticket o ${hoy}",
+    "confianza": "alta/media/baja",
+    "notas": "cualquier detalle adicional",
+    "cantidad": 5.0,
+    "unidad": "kg",
+    "tipo_gasto": "variable"
+  }
+]
+
+REGLAS PARA TICKETS CON MÚLTIPLES ITEMS:
+- Extraé CADA LÍNEA de producto/item como un gasto separado
+- Si un item aparece como "anulado" o con monto negativo, IGNORALO (no lo incluyas)
+- El proveedor es el mismo para todos los items (el nombre del comercio del ticket)
+- La fecha es la misma para todos (la del ticket)
+- Cada item tiene su propio monto individual, NO el total del ticket
+- Si hay items repetidos con el mismo precio, incluí cada uno
+
+TIPO DE GASTO:
+- "fijo": gastos recurrentes mensuales: alquiler, sueldos, servicios, impuestos, seguros
+- "variable": gastos que varían: insumos, mantenimiento puntual, compras ocasionales
+
+REGLAS GENERALES:
+- El monto SIEMPRE debe ser un número positivo
+- Si no podés determinar el monto con certeza, poné confianza "baja"
+- Si la imagen no parece ser un ticket/factura, devolvé un array con un solo objeto con monto: 0 y confianza: "baja"
+- En "descripcion" sé conciso pero claro (máx 50 caracteres)
+- "cantidad" y "unidad" son OPCIONALES: solo incluirlos si el dato está presente
+- NO inventar cantidades, solo extraerlas si están explícitas
+
+CAMPOS FALTANTES:
+NO incluir campos_faltantes en tickets con múltiples items. Solo registrar lo que se ve.
+
+FECHA: Si no se menciona fecha, usá HOY (${hoy}).`;
+}
+
 export async function procesarTexto(texto: string, timezone?: string): Promise<ClaudeGastoResponse> {
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-20250514',
@@ -106,14 +166,14 @@ export async function procesarTexto(texto: string, timezone?: string): Promise<C
   }
 }
 
-export async function procesarImagen(imageBuffer: Buffer, mimeType: string, caption?: string, timezone?: string): Promise<ClaudeGastoResponse> {
+export async function procesarImagen(imageBuffer: Buffer, mimeType: string, caption?: string, timezone?: string): Promise<ClaudeGastoResponse[]> {
   const base64 = imageBuffer.toString('base64');
   const mediaType = mimeType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
 
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-20250514',
-    max_tokens: 500,
-    system: getSystemPrompt(timezone),
+    max_tokens: 4000,
+    system: getSystemPromptTicket(timezone),
     messages: [
       {
         role: 'user',
@@ -128,9 +188,9 @@ export async function procesarImagen(imageBuffer: Buffer, mimeType: string, capt
           },
           {
             type: 'text',
-            text: caption 
-              ? `Extraé el gasto de esta imagen. Contexto adicional: "${caption}"`
-              : 'Extraé el gasto de esta imagen de factura/ticket.',
+            text: caption
+              ? `Extraé los gastos de esta imagen. Contexto adicional: "${caption}"`
+              : 'Extraé los gastos de esta imagen de factura/ticket.',
           },
         ],
       },
@@ -144,20 +204,21 @@ export async function procesarImagen(imageBuffer: Buffer, mimeType: string, capt
 
   try {
     const jsonStr = content.text.replace(/```json\n?|\n?```/g, '').trim();
-    return JSON.parse(jsonStr);
+    const parsed = JSON.parse(jsonStr);
+    return Array.isArray(parsed) ? parsed : [parsed];
   } catch (e) {
     console.error('Error parseando respuesta:', content.text);
     throw new Error('No pude leer la factura');
   }
 }
 
-export async function procesarPDF(pdfBuffer: Buffer, filename?: string, timezone?: string): Promise<ClaudeGastoResponse> {
+export async function procesarPDF(pdfBuffer: Buffer, filename?: string, timezone?: string): Promise<ClaudeGastoResponse[]> {
   const base64 = pdfBuffer.toString('base64');
 
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-20250514',
-    max_tokens: 500,
-    system: getSystemPrompt(timezone),
+    max_tokens: 4000,
+    system: getSystemPromptTicket(timezone),
     messages: [
       {
         role: 'user',
@@ -172,7 +233,7 @@ export async function procesarPDF(pdfBuffer: Buffer, filename?: string, timezone
           },
           {
             type: 'text',
-            text: `Extraé el gasto de este PDF${filename ? ` (${filename})` : ''}.`,
+            text: `Extraé los gastos de este PDF${filename ? ` (${filename})` : ''}.`,
           },
         ],
       },
@@ -186,7 +247,8 @@ export async function procesarPDF(pdfBuffer: Buffer, filename?: string, timezone
 
   try {
     const jsonStr = content.text.replace(/```json\n?|\n?```/g, '').trim();
-    return JSON.parse(jsonStr);
+    const parsed = JSON.parse(jsonStr);
+    return Array.isArray(parsed) ? parsed : [parsed];
   } catch (e) {
     console.error('Error parseando respuesta:', content.text);
     throw new Error('No pude leer el PDF');

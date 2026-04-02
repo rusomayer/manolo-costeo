@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { TelegramUpdate, TelegramMessage, ClaudeGastoResponse } from '@/lib/types';
-import { enviarMensaje, obtenerArchivo, formatearRespuesta, formatearError } from '@/lib/telegram';
+import { enviarMensaje, obtenerArchivo, formatearRespuesta, formatearRespuestaMultiple, formatearError } from '@/lib/telegram';
 import { procesarTexto, procesarImagen, procesarPDF, transcribirAudio, procesarAudio, procesarRespuestaFollowUp, clasificarIntencion } from '@/lib/claude';
 import { consultaManolo } from '@/lib/asistente';
 import { guardarGasto, guardarGastoPendiente, buscarGastoPendiente, buscarUltimoPendiente, eliminarGastoPendiente, limpiarPendientesExpirados, autoRegistrarPrecio } from '@/lib/supabase';
@@ -173,18 +173,35 @@ async function procesarFoto(db: DB, message: TelegramMessage, chatId: number, me
   await enviarMensaje(chatId, '📸 Analizando la imagen...', messageId);
 
   const { buffer } = await obtenerArchivo(fotoGrande.file_id);
-  const resultado = await procesarImagen(buffer, 'image/jpeg', message.caption, info.timezone);
+  const resultados = await procesarImagen(buffer, 'image/jpeg', message.caption, info.timezone);
 
-  if (resultado.monto === 0) {
+  // Filter out items with 0 amount
+  const validResults = resultados.filter(r => r.monto > 0);
+
+  if (validResults.length === 0) {
     await enviarMensaje(chatId, '🤔 No pude leer bien la factura. Podes mandarla con mejor luz o escribir el monto?', messageId);
     return;
   }
 
-  if (await preguntarSiFalta(db, resultado, chatId, messageId, info.localId)) return;
+  // Single item: use original flow with follow-up support
+  if (validResults.length === 1) {
+    const resultado = validResults[0];
+    if (await preguntarSiFalta(db, resultado, chatId, messageId, info.localId)) return;
+    const gastoGuardado = await guardarGasto(db, { ...resultado, telegram_message_id: String(messageId) }, info.localId, info.timezone);
+    await autoRegistrarPrecio(db, { ...resultado, fecha: gastoGuardado.fecha, categoria: resultado.categoria }, info.localId);
+    await enviarMensaje(chatId, formatearRespuesta(resultado), messageId);
+    return;
+  }
 
-  const gastoGuardado = await guardarGasto(db, { ...resultado, telegram_message_id: String(messageId) }, info.localId, info.timezone);
-  await autoRegistrarPrecio(db, { ...resultado, fecha: gastoGuardado.fecha, categoria: resultado.categoria }, info.localId);
-  await enviarMensaje(chatId, formatearRespuesta(resultado), messageId);
+  // Multiple items: save all and send summary
+  let totalMonto = 0;
+  for (const resultado of validResults) {
+    const gastoGuardado = await guardarGasto(db, { ...resultado, telegram_message_id: String(messageId) }, info.localId, info.timezone);
+    await autoRegistrarPrecio(db, { ...resultado, fecha: gastoGuardado.fecha, categoria: resultado.categoria }, info.localId);
+    totalMonto += resultado.monto;
+  }
+
+  await enviarMensaje(chatId, formatearRespuestaMultiple(validResults, totalMonto), messageId);
 }
 
 async function procesarDocumento(db: DB, message: TelegramMessage, chatId: number, messageId: number) {
@@ -203,18 +220,32 @@ async function procesarDocumento(db: DB, message: TelegramMessage, chatId: numbe
   await enviarMensaje(chatId, '📄 Analizando el PDF...', messageId);
 
   const { buffer } = await obtenerArchivo(doc.file_id);
-  const resultado = await procesarPDF(buffer, doc.file_name, info.timezone);
+  const resultados = await procesarPDF(buffer, doc.file_name, info.timezone);
 
-  if (resultado.monto === 0) {
+  const validResults = resultados.filter(r => r.monto > 0);
+
+  if (validResults.length === 0) {
     await enviarMensaje(chatId, '🤔 No pude extraer datos del PDF. Podes escribir el monto manualmente?', messageId);
     return;
   }
 
-  if (await preguntarSiFalta(db, resultado, chatId, messageId, info.localId)) return;
+  if (validResults.length === 1) {
+    const resultado = validResults[0];
+    if (await preguntarSiFalta(db, resultado, chatId, messageId, info.localId)) return;
+    const gastoGuardado = await guardarGasto(db, { ...resultado, telegram_message_id: String(messageId) }, info.localId, info.timezone);
+    await autoRegistrarPrecio(db, { ...resultado, fecha: gastoGuardado.fecha, categoria: resultado.categoria }, info.localId);
+    await enviarMensaje(chatId, formatearRespuesta(resultado), messageId);
+    return;
+  }
 
-  const gastoGuardado = await guardarGasto(db, { ...resultado, telegram_message_id: String(messageId) }, info.localId, info.timezone);
-  await autoRegistrarPrecio(db, { ...resultado, fecha: gastoGuardado.fecha, categoria: resultado.categoria }, info.localId);
-  await enviarMensaje(chatId, formatearRespuesta(resultado), messageId);
+  let totalMonto = 0;
+  for (const resultado of validResults) {
+    const gastoGuardado = await guardarGasto(db, { ...resultado, telegram_message_id: String(messageId) }, info.localId, info.timezone);
+    await autoRegistrarPrecio(db, { ...resultado, fecha: gastoGuardado.fecha, categoria: resultado.categoria }, info.localId);
+    totalMonto += resultado.monto;
+  }
+
+  await enviarMensaje(chatId, formatearRespuestaMultiple(validResults, totalMonto), messageId);
 }
 
 async function procesarVoz(db: DB, message: TelegramMessage, chatId: number, messageId: number) {

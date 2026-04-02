@@ -110,6 +110,39 @@ export function formatearRespuesta(gasto: {
   return respuesta;
 }
 
+export function formatearRespuestaMultiple(gastos: {
+  descripcion: string;
+  monto: number;
+  categoria: string;
+  proveedor?: string;
+  cantidad?: number;
+  unidad?: string;
+}[], totalMonto: number): string {
+  const categoriaEmoji: Record<string, string> = {
+    insumos: '☕', servicios: '💡', sueldos: '👤', alquiler: '🏠',
+    impuestos: '📋', mantenimiento: '🔧', otros: '📦',
+  };
+
+  const fmt = (n: number) => new Intl.NumberFormat('es-AR', {
+    style: 'currency', currency: 'ARS', minimumFractionDigits: 0,
+  }).format(n);
+
+  let respuesta = `✅ <b>${gastos.length} items registrados</b>\n`;
+  if (gastos[0]?.proveedor) {
+    respuesta += `🏪 ${gastos[0].proveedor}\n`;
+  }
+  respuesta += `\n`;
+
+  for (const g of gastos) {
+    const emoji = categoriaEmoji[g.categoria] || '📦';
+    const cant = g.cantidad && g.unidad ? ` (${g.cantidad} ${g.unidad})` : '';
+    respuesta += `${emoji} ${g.descripcion}${cant} — ${fmt(g.monto)}\n`;
+  }
+
+  respuesta += `\n💰 <b>Total: ${fmt(totalMonto)}</b>`;
+  return respuesta;
+}
+
 export function formatearError(mensaje: string): string {
   return `❌ <b>Error</b>\n\n${mensaje}\n\n<i>Probá de nuevo o escribí el gasto de otra forma.</i>`;
 }
