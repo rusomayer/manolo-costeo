@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import Link from 'next/link';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { Gasto, GastoInput, TipoGasto } from '@/lib/types';
 import FiltroFechas from './components/FiltroFechas';
 import ModalGasto from './components/ModalGasto';
@@ -34,6 +35,8 @@ const CATEGORIA_EMOJI: Record<string, string> = {
   otros: '📦',
 };
 
+const GASTOS_EN_DASHBOARD = 5;
+
 export default function Dashboard() {
   const [gastos, setGastos] = useState<Gasto[]>([]);
   const [resumen, setResumen] = useState<Resumen | null>(null);
@@ -41,7 +44,6 @@ export default function Dashboard() {
   const [filtroCategoria, setFiltroCategoria] = useState<string>('');
   const [mostrarForm, setMostrarForm] = useState(false);
 
-  // Initialize to current month
   const [desde, setDesde] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
@@ -86,36 +88,45 @@ export default function Dashboard() {
     cargarDatos();
   }
 
-  const formatMonto = (monto: number) => {
-    return new Intl.NumberFormat('es-AR', {
+  const formatMonto = (monto: number) =>
+    new Intl.NumberFormat('es-AR', {
       style: 'currency',
       currency: 'ARS',
       minimumFractionDigits: 0,
     }).format(monto);
-  };
 
-  const datosGrafico = resumen
-    ? Object.entries(resumen.porCategoria).map(([categoria, monto]) => ({
-        name: categoria.charAt(0).toUpperCase() + categoria.slice(1),
-        monto,
-        color: CATEGORIAS_COLORES[categoria] || '#888',
-      }))
+  const datosTorta = resumen
+    ? Object.entries(resumen.porCategoria)
+        .filter(([, monto]) => monto > 0)
+        .map(([categoria, monto]) => ({
+          name: categoria,
+          label: categoria.charAt(0).toUpperCase() + categoria.slice(1),
+          monto,
+          color: CATEGORIAS_COLORES[categoria] || '#888',
+        }))
+        .sort((a, b) => b.monto - a.monto)
     : [];
 
-  // Build period label from desde/hasta
   const periodoLabel = (() => {
     if (!desde || !hasta) return 'Período';
     const dDesde = new Date(desde + 'T12:00:00');
     const dHasta = new Date(hasta + 'T12:00:00');
-    // Check if it's a full month
-    if (dDesde.getDate() === 1 && dHasta.getDate() === new Date(dHasta.getFullYear(), dHasta.getMonth() + 1, 0).getDate() && dDesde.getMonth() === dHasta.getMonth()) {
+    if (
+      dDesde.getDate() === 1 &&
+      dHasta.getDate() === new Date(dHasta.getFullYear(), dHasta.getMonth() + 1, 0).getDate() &&
+      dDesde.getMonth() === dHasta.getMonth()
+    ) {
       return dDesde.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
     }
-    return `${dDesde.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })} - ${dHasta.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}`;
+    return `${dDesde.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })} – ${dHasta.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}`;
   })();
+
+  const gastosVisibles = gastos.slice(0, GASTOS_EN_DASHBOARD);
+  const hayMasGastos = gastos.length > GASTOS_EN_DASHBOARD;
 
   return (
     <div style={{ minHeight: '100vh', padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
+
       {/* Header */}
       <header style={{
         marginBottom: '24px',
@@ -195,69 +206,23 @@ export default function Dashboard() {
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
             gap: '16px',
-            marginBottom: '32px',
+            marginBottom: '24px',
           }}>
-            <MetricCard
-              label="Total del período"
-              value={formatMonto(resumen?.total || 0)}
-            />
-            <MetricCard
-              label="Gastos registrados"
-              value={String(resumen?.cantidad || 0)}
-            />
-            <MetricCard
-              label="Gastos fijos"
-              value={formatMonto(resumen?.porTipo?.fijo || 0)}
-            />
-            <MetricCard
-              label="Gastos variables"
-              value={formatMonto(resumen?.porTipo?.variable || 0)}
-            />
+            <MetricCard label="Total del período" value={formatMonto(resumen?.total || 0)} />
+            <MetricCard label="Gastos registrados" value={String(resumen?.cantidad || 0)} />
+            <MetricCard label="Gastos fijos" value={formatMonto(resumen?.porTipo?.fijo || 0)} />
+            <MetricCard label="Gastos variables" value={formatMonto(resumen?.porTipo?.variable || 0)} />
           </div>
 
-          {/* Gráfico */}
-          {datosGrafico.length > 0 && (
-            <div style={{
-              background: 'var(--bg-primary)',
-              borderRadius: 'var(--radius)',
-              padding: '24px',
-              marginBottom: '32px',
-              border: '1px solid var(--border)',
-            }}>
-              <h2 style={{ fontSize: '16px', fontWeight: '500', marginBottom: '16px' }}>
-                Gastos por categoría
-              </h2>
-              <div style={{ height: '280px' }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={datosGrafico} layout="vertical">
-                    <XAxis type="number" tickFormatter={(v) => `$${(v/1000).toFixed(0)}k`} />
-                    <YAxis type="category" dataKey="name" width={100} />
-                    <Tooltip
-                      formatter={(value: number) => formatMonto(value)}
-                      contentStyle={{
-                        background: 'var(--bg-primary)',
-                        border: '1px solid var(--border)',
-                        borderRadius: '8px',
-                      }}
-                    />
-                    <Bar dataKey="monto" radius={[0, 4, 4, 0]}>
-                      {datosGrafico.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          )}
-
-          {/* Lista de gastos */}
+          {/* Gastos recientes */}
           <div style={{
             background: 'var(--bg-primary)',
             borderRadius: 'var(--radius)',
             border: '1px solid var(--border)',
             overflow: 'hidden',
+            marginBottom: '24px',
           }}>
+            {/* Header de la sección */}
             <div style={{
               padding: '16px 20px',
               borderBottom: '1px solid var(--border)',
@@ -266,18 +231,30 @@ export default function Dashboard() {
               alignItems: 'center',
             }}>
               <h2 style={{ fontSize: '16px', fontWeight: '500' }}>
-                Últimos gastos
+                Gastos recientes
               </h2>
-              <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
-                {gastos.length} registros
-              </span>
+              <Link
+                href="/dashboard/gastos"
+                style={{
+                  fontSize: '13px',
+                  color: 'var(--accent)',
+                  textDecoration: 'none',
+                  fontWeight: 500,
+                  padding: '4px 10px',
+                  border: '1px solid var(--accent)',
+                  borderRadius: 'var(--radius-sm)',
+                  transition: 'all 0.15s',
+                }}
+              >
+                Ver todos →
+              </Link>
             </div>
 
             {gastos.length === 0 ? (
               <div style={{
                 padding: '48px',
                 textAlign: 'center',
-                color: 'var(--text-secondary)'
+                color: 'var(--text-secondary)',
               }}>
                 No hay gastos registrados en este período.
                 <br />
@@ -286,27 +263,38 @@ export default function Dashboard() {
                 </span>
               </div>
             ) : (
-              <div>
-                {gastos.map((gasto) => (
+              <>
+                {gastosVisibles.map((gasto) => (
                   <div
                     key={gasto.id}
                     style={{
-                      padding: '16px 20px',
+                      padding: '14px 20px',
                       borderBottom: '1px solid var(--border)',
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center',
+                      gap: 12,
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <span style={{ fontSize: '20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+                      <span style={{
+                        fontSize: '20px',
+                        width: 36,
+                        height: 36,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: 'var(--bg-secondary)',
+                        borderRadius: '50%',
+                        flexShrink: 0,
+                      }}>
                         {CATEGORIA_EMOJI[gasto.categoria] || '📦'}
                       </span>
-                      <div>
-                        <p style={{ fontWeight: '500', marginBottom: '2px' }}>
+                      <div style={{ minWidth: 0 }}>
+                        <p style={{ fontWeight: '500', marginBottom: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {gasto.descripcion}
                         </p>
-                        <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                        <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                           {gasto.categoria.charAt(0).toUpperCase() + gasto.categoria.slice(1)}
                           {gasto.proveedor && ` · ${gasto.proveedor}`}
                           {' · '}
@@ -314,7 +302,7 @@ export default function Dashboard() {
                             day: 'numeric',
                             month: 'short',
                           })}
-                          {' · '}
+                          {' '}
                           <span style={{
                             fontSize: '11px',
                             padding: '1px 6px',
@@ -333,17 +321,150 @@ export default function Dashboard() {
                       </div>
                     </div>
                     <p style={{
-                      fontWeight: '500',
+                      fontWeight: '600',
                       color: 'var(--danger)',
                       whiteSpace: 'nowrap',
+                      flexShrink: 0,
                     }}>
                       -{formatMonto(gasto.monto)}
                     </p>
                   </div>
                 ))}
-              </div>
+
+                {/* Footer con "Ver todos" si hay más */}
+                {hayMasGastos && (
+                  <div style={{
+                    padding: '14px 20px',
+                    textAlign: 'center',
+                    borderTop: '1px solid var(--border)',
+                  }}>
+                    <Link
+                      href="/dashboard/gastos"
+                      style={{
+                        fontSize: '13px',
+                        color: 'var(--accent)',
+                        textDecoration: 'none',
+                        fontWeight: 500,
+                      }}
+                    >
+                      Ver los {gastos.length - GASTOS_EN_DASHBOARD} gastos restantes →
+                    </Link>
+                  </div>
+                )}
+              </>
             )}
           </div>
+
+          {/* Gráfico de torta */}
+          {datosTorta.length > 0 && (
+            <div style={{
+              background: 'var(--bg-primary)',
+              borderRadius: 'var(--radius)',
+              padding: '20px',
+              border: '1px solid var(--border)',
+            }}>
+              <h2 style={{ fontSize: '16px', fontWeight: '500', marginBottom: '16px' }}>
+                Distribución por categoría
+              </h2>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '24px',
+                flexWrap: 'wrap',
+              }}>
+                {/* Donut chart */}
+                <div style={{ position: 'relative', width: 200, height: 200, flexShrink: 0 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={datosTorta}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={90}
+                        paddingAngle={2}
+                        dataKey="monto"
+                        strokeWidth={0}
+                      >
+                        {datosTorta.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(value: number) => [formatMonto(value), 'Monto']}
+                        contentStyle={{
+                          background: 'var(--bg-primary)',
+                          border: '1px solid var(--border)',
+                          borderRadius: '8px',
+                          fontSize: 12,
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  {/* Total en el centro */}
+                  <div style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    textAlign: 'center',
+                    pointerEvents: 'none',
+                  }}>
+                    <p style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total</p>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginTop: 2 }}>
+                      {formatMonto(resumen?.total || 0)}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Leyenda */}
+                <div style={{ flex: 1, minWidth: 200 }}>
+                  {datosTorta.map((entry) => {
+                    const pct = resumen ? ((entry.monto / resumen.total) * 100).toFixed(0) : '0';
+                    return (
+                      <div
+                        key={entry.name}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 10,
+                          marginBottom: 10,
+                        }}
+                      >
+                        <span style={{
+                          width: 10,
+                          height: 10,
+                          borderRadius: '50%',
+                          background: entry.color,
+                          flexShrink: 0,
+                        }} />
+                        <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)' }}>
+                          {CATEGORIA_EMOJI[entry.name]} {entry.label}
+                        </span>
+                        <span style={{
+                          fontSize: 12,
+                          color: 'var(--text-muted)',
+                          minWidth: 36,
+                          textAlign: 'right',
+                        }}>
+                          {pct}%
+                        </span>
+                        <span style={{
+                          fontSize: 13,
+                          fontWeight: 600,
+                          color: 'var(--text-primary)',
+                          minWidth: 90,
+                          textAlign: 'right',
+                        }}>
+                          {formatMonto(entry.monto)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
 
@@ -370,14 +491,10 @@ function MetricCard({ label, value }: { label: string; value: string }) {
       padding: '16px 20px',
       border: '1px solid var(--border)',
     }}>
-      <p style={{
-        fontSize: '13px',
-        color: 'var(--text-secondary)',
-        marginBottom: '4px'
-      }}>
+      <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
         {label}
       </p>
-      <p style={{ fontSize: '24px', fontWeight: '600' }}>
+      <p style={{ fontSize: '22px', fontWeight: '600' }}>
         {value}
       </p>
     </div>
