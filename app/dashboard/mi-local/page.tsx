@@ -2,6 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import {
+  MapPin, Building2, Settings2, Users, Users2, DollarSign, Target,
+  type LucideIcon,
+} from 'lucide-react';
 import type { Local, DiaSemana, HorarioRango, Empleado } from '@/lib/types';
 
 // ─── Interfaces para equipo ───────────────────────────────────────────────────
@@ -281,7 +285,10 @@ export default function MiLocalPage() {
 
       {/* ── Equipo y colaboradores ── */}
       <div id="equipo" style={{ ...cardStyle, padding: '20px', marginBottom: 16 }}>
-        <h3 style={sectionTitleStyle}>👤 Equipo y colaboradores</h3>
+        <h3 style={{ ...sectionTitleStyle, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Users size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+          Equipo y colaboradores
+        </h3>
 
         {members.length > 0 && (
           <div style={{ marginBottom: 16 }}>
@@ -363,7 +370,7 @@ export default function MiLocalPage() {
 
       {/* ── Datos básicos ── */}
       <SectionCard
-        title="📍 Datos básicos"
+        title="Datos básicos" icon={MapPin}
         isEditing={editingSection === 'datos'}
         saving={savingSection === 'datos'}
         saved={savedSection === 'datos'}
@@ -420,7 +427,7 @@ export default function MiLocalPage() {
 
       {/* ── Espacio y capacidad ── */}
       <SectionCard
-        title="🏠 Espacio y capacidad"
+        title="Espacio y capacidad" icon={Building2}
         isEditing={editingSection === 'espacio'}
         saving={savingSection === 'espacio'}
         saved={savedSection === 'espacio'}
@@ -459,7 +466,7 @@ export default function MiLocalPage() {
 
       {/* ── Operaciones ── */}
       <SectionCard
-        title="⚙️ Operaciones"
+        title="Operaciones" icon={Settings2}
         isEditing={editingSection === 'operaciones'}
         saving={savingSection === 'operaciones'}
         saved={savedSection === 'operaciones'}
@@ -531,7 +538,10 @@ export default function MiLocalPage() {
       {/* ── Empleados ── */}
       <div style={{ ...cardStyle, marginBottom: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-          <h3 style={sectionTitleStyle}>🧑‍🍳 Empleados</h3>
+          <h3 style={{ ...sectionTitleStyle, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Users2 size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+            Empleados
+          </h3>
           {!showEmpleadoForm && (
             <button onClick={startAddEmpleado} style={editBtnStyle}>+ Agregar</button>
           )}
@@ -673,7 +683,7 @@ export default function MiLocalPage() {
 
       {/* ── Costos fijos ── */}
       <SectionCard
-        title="💰 Costos fijos mensuales"
+        title="Costos fijos mensuales" icon={DollarSign}
         isEditing={editingSection === 'costos'}
         saving={savingSection === 'costos'}
         saved={savedSection === 'costos'}
@@ -725,7 +735,7 @@ export default function MiLocalPage() {
 
       {/* ── Objetivos ── */}
       <SectionCard
-        title="🎯 Objetivos del negocio"
+        title="Objetivos del negocio" icon={Target}
         isEditing={editingSection === 'objetivos'}
         saving={savingSection === 'objetivos'}
         saved={savedSection === 'objetivos'}
@@ -764,8 +774,9 @@ export default function MiLocalPage() {
 
 // ─── Sub-componentes ──────────────────────────────────────────────────────────
 
-function SectionCard({ title, isEditing, saving, saved, onEdit, onCancel, onSave, viewContent, editContent }: {
+function SectionCard({ title, icon: Icon, isEditing, saving, saved, onEdit, onCancel, onSave, viewContent, editContent }: {
   title: string;
+  icon?: LucideIcon;
   isEditing: boolean;
   saving: boolean;
   saved: boolean;
@@ -778,7 +789,10 @@ function SectionCard({ title, isEditing, saving, saved, onEdit, onCancel, onSave
   return (
     <div style={{ ...cardStyle, marginBottom: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-        <h3 style={sectionTitleStyle}>{title}</h3>
+        <h3 style={{ ...sectionTitleStyle, display: 'flex', alignItems: 'center', gap: 8 }}>
+          {Icon && <Icon size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />}
+          {title}
+        </h3>
         {!isEditing && (
           <button onClick={onEdit} style={editBtnStyle}>
             {saved ? '✓ Guardado' : 'Editar'}
