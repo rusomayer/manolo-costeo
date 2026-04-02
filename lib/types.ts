@@ -277,7 +277,7 @@ export interface ClaudeGastoResponse {
   unidad?: string;
   tipo_gasto?: TipoGasto;
   campos_faltantes?: {
-    campo: 'cantidad_unidad' | 'fecha';
+    campo: 'cantidad_unidad';
     pregunta: string;
   }[];
 }

@@ -29,7 +29,7 @@ RESPONDE SIEMPRE EN JSON con este formato exacto:
   "monto": 12345.00,
   "categoria": "insumos",
   "proveedor": "nombre del proveedor si se menciona",
-  "fecha": "2024-01-15 si se menciona una fecha específica, sino null",
+  "fecha": "2024-01-15 si se menciona una fecha específica o viene en factura/imagen/PDF, sino usar HOY (${hoy})",
   "confianza": "alta/media/baja",
   "notas": "cualquier detalle adicional relevante",
   "cantidad": 5.0,
@@ -68,10 +68,9 @@ Solo UNA pregunta por vez (la más importante).
    - NO preguntar: "Pagué la luz", "Sueldo de Juan", "Alquiler marzo" (no son insumos)
    - Ejemplo de pregunta: "¿Cuánto compraste? (ej: 5kg, 20 litros, 3 cajas)"
 
-2. "fecha": Si NO se mencionó ninguna fecha o referencia temporal (hoy, ayer, lunes, etc.)
-   - Ejemplo de pregunta: "¿Esto fue hoy u otro día?"
+FECHA: Si no se menciona fecha, usá HOY (${hoy}) automáticamente. NUNCA preguntar por la fecha.
+Si el usuario la menciona o viene en factura/imagen/PDF, usá esa fecha.
 
-Prioridad: cantidad_unidad > fecha.
 Si la cantidad YA está en el mensaje, NO preguntar por ella.
 Si no falta nada relevante, NO incluir campos_faltantes.
 
