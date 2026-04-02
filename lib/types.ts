@@ -23,6 +23,25 @@ export interface RolEmpleado {
   cantidad: number;
 }
 
+export interface HorarioRango {
+  id: string;
+  desde: DiaSemana;
+  hasta: DiaSemana;
+  abre: string;
+  cierra: string;
+}
+
+export interface Empleado {
+  id: string;
+  nombre: string;
+  rol: string;
+  sueldo_neto?: number;
+  horas_jornada?: number;
+  dias: DiaSemana[];
+  jornada: 'completa' | 'media' | 'personalizada';
+  es_yo: boolean;
+}
+
 export interface Local {
   id: string;
   created_at: string;
@@ -46,6 +65,8 @@ export interface Local {
   rotacion_mesa?: number;
   roles_empleados?: RolEmpleado[];
   horarios?: Horarios;
+  horario_apertura?: HorarioRango[];
+  empleados?: Empleado[];
   // Mi Local - costos fijos
   alquiler_mensual?: number;
   costo_luz?: number;
