@@ -3,6 +3,17 @@
 import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import Image from 'next/image';
+import {
+  LayoutDashboard,
+  Store,
+  Receipt,
+  Truck,
+  ChefHat,
+  BarChart2,
+  Bot,
+  Settings,
+  type LucideIcon,
+} from 'lucide-react';
 import { Local } from '@/lib/types';
 import TelegramButton from './telegram-button';
 
@@ -15,15 +26,21 @@ interface SidebarProps {
   signOutAction: () => Promise<void>;
 }
 
-const NAV_ITEMS = [
-  { href: '/dashboard', label: 'Dashboard', icon: '📊' },
-  { href: '/dashboard/mi-local', label: 'Mi Local', icon: '🏪' },
-  { href: '/dashboard/gastos', label: 'Gastos', icon: '💰' },
-  { href: '/dashboard/proveedores', label: 'Proveedores', icon: '🏪' },
-  { href: '/dashboard/recetas', label: 'Recetas', icon: '🍳' },
-  { href: '/dashboard/reportes', label: 'Reportes', icon: '📈' },
-  { href: '/dashboard/asistente', label: 'Asistente', icon: '🤖' },
-  { href: '/dashboard/configuracion', label: 'Configuración', icon: '⚙️' },
+interface NavItem {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+}
+
+const NAV_ITEMS: NavItem[] = [
+  { href: '/dashboard',               label: 'Dashboard',    icon: LayoutDashboard },
+  { href: '/dashboard/mi-local',      label: 'Mi Local',     icon: Store           },
+  { href: '/dashboard/gastos',        label: 'Gastos',       icon: Receipt         },
+  { href: '/dashboard/proveedores',   label: 'Proveedores',  icon: Truck           },
+  { href: '/dashboard/recetas',       label: 'Recetas',      icon: ChefHat         },
+  { href: '/dashboard/reportes',      label: 'Reportes',     icon: BarChart2       },
+  { href: '/dashboard/asistente',     label: 'Asistente',    icon: Bot             },
+  { href: '/dashboard/configuracion', label: 'Configuración',icon: Settings        },
 ];
 
 export default function Sidebar({ locales, selectedLocal, userEmail, telegramLink, twiioCode, signOutAction }: SidebarProps) {
@@ -72,20 +89,28 @@ export default function Sidebar({ locales, selectedLocal, userEmail, telegramLin
 
       {/* Nav Links */}
       <nav style={styles.nav}>
-        {NAV_ITEMS.map((item) => (
-          <a
-            key={item.href}
-            href={item.href}
-            onClick={() => setMobileOpen(false)}
-            style={{
-              ...styles.navLink,
-              ...(isActive(item.href) ? styles.navLinkActive : {}),
-            }}
-          >
-            <span style={styles.navIcon}>{item.icon}</span>
-            <span>{item.label}</span>
-          </a>
-        ))}
+        {NAV_ITEMS.map((item) => {
+          const Icon = item.icon;
+          const active = isActive(item.href);
+          return (
+            <a
+              key={item.href}
+              href={item.href}
+              onClick={() => setMobileOpen(false)}
+              style={{
+                ...styles.navLink,
+                ...(active ? styles.navLinkActive : {}),
+              }}
+            >
+              <Icon
+                size={18}
+                strokeWidth={active ? 2.2 : 1.8}
+                style={{ flexShrink: 0, color: active ? 'var(--accent)' : 'var(--text-muted)' }}
+              />
+              <span>{item.label}</span>
+            </a>
+          );
+        })}
       </nav>
 
       {/* Bottom: Telegram + User */}
@@ -227,11 +252,6 @@ const styles: Record<string, React.CSSProperties> = {
     background: 'var(--bg-tertiary)',
     color: 'var(--text-primary)',
     fontWeight: 600,
-  },
-  navIcon: {
-    fontSize: 18,
-    width: 24,
-    textAlign: 'center',
   },
   bottomSection: {
     borderTop: '1px solid var(--border)',
