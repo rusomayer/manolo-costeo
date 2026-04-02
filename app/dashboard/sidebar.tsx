@@ -62,6 +62,22 @@ export default function Sidebar({ locales, selectedLocal, userEmail, telegramLin
     window.location.reload();
   }
 
+  // Sincroniza la cookie con el local seleccionado (fix para móvil sin cookie)
+  useEffect(() => {
+    const currentCookie = document.cookie
+      .split(';')
+      .find(c => c.trim().startsWith('selected_local='))
+      ?.split('=')[1]?.trim();
+
+    if (currentCookie !== selectedLocal.id) {
+      document.cookie = `selected_local=${selectedLocal.id};path=/;max-age=31536000`;
+      if (!currentCookie) {
+        // Primera vez sin cookie (ej: móvil): recargar para que todas las queries la tomen
+        window.location.reload();
+      }
+    }
+  }, [selectedLocal.id]);
+
   // Cierra el menú al click fuera
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
