@@ -138,14 +138,6 @@ export default function Sidebar({ locales, selectedLocal, userEmail, telegramLin
                 <Plus size={13} />
                 Agregar local
               </a>
-              <a
-                href="/dashboard/mi-local#equipo"
-                style={styles.localDropdownAdd}
-                onClick={() => setLocalMenuOpen(false)}
-              >
-                <UserPlus size={13} />
-                Invitar colaborador
-              </a>
             </div>
           </div>
         )}
@@ -181,6 +173,29 @@ export default function Sidebar({ locales, selectedLocal, userEmail, telegramLin
       <div style={styles.bottomSection}>
         <div style={styles.telegramRow}>
           <TelegramButton telegramLink={telegramLink} twiioCode={twiioCode} />
+          <a
+            href="/dashboard/mi-local#equipo"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 7,
+              marginTop: 8,
+              padding: '9px 12px',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--border)',
+              background: 'var(--bg-secondary)',
+              color: 'var(--text-secondary)',
+              fontSize: 13,
+              fontWeight: 600,
+              textDecoration: 'none',
+              width: '100%',
+              boxSizing: 'border-box',
+            }}
+          >
+            <UserPlus size={15} />
+            Invitar colaborador
+          </a>
         </div>
         <div style={styles.userSection}>
           <div style={styles.userEmail} title={userEmail}>
