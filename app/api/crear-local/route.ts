@@ -8,13 +8,17 @@ export async function POST(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.redirect(new URL('/', request.url));
+    return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
   }
 
-  const formData = await request.formData();
-  const nombre = formData.get('nombre') as string;
-  const direccion = formData.get('direccion') as string;
-  const timezone = formData.get('timezone') as string || 'America/Buenos_Aires';
+  const body = await request.json();
+  const nombre = body.nombre as string;
+  const direccion = body.direccion as string;
+  const timezone = body.timezone || 'America/Buenos_Aires';
+
+  if (!nombre) {
+    return NextResponse.json({ error: 'El nombre es obligatorio' }, { status: 400 });
+  }
 
   const db = createServiceClient();
   const { data, error } = await db
@@ -24,11 +28,11 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (error) {
-    return NextResponse.redirect(new URL('/crear-local?error=1', request.url));
+    return NextResponse.json({ error: 'Error al crear el local' }, { status: 500 });
   }
 
   const cookieStore = cookies();
   cookieStore.set('selected_local', data.id, { path: '/', maxAge: 60 * 60 * 24 * 365 });
 
-  return NextResponse.redirect(new URL('/dashboard', request.url));
+  return NextResponse.json({ ok: true, id: data.id });
 }

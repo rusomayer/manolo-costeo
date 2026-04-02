@@ -1,13 +1,42 @@
 'use client';
 
-import { useRef } from 'react';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function CrearLocalPage() {
-  const tzRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
+  const [nombre, setNombre] = useState('');
+  const [direccion, setDireccion] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    if (tzRef.current) {
-      tzRef.current.value = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    try {
+      const res = await fetch('/api/crear-local', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nombre,
+          direccion,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || 'Error al crear el local');
+        return;
+      }
+
+      router.push('/dashboard');
+    } catch {
+      setError('Error de conexion. Intenta de nuevo.');
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -20,28 +49,30 @@ export default function CrearLocalPage() {
           Agrega tu cafe, bar o restaurante para empezar a registrar gastos.
         </p>
 
-        <form action="/api/crear-local" method="POST" onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit}>
           <label style={styles.label}>Nombre del local</label>
           <input
-            name="nombre"
             type="text"
             placeholder="Ej: Cafe Manolo"
             required
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
             style={styles.input}
           />
 
           <label style={styles.label}>Direccion (opcional)</label>
           <input
-            name="direccion"
             type="text"
             placeholder="Ej: Av. Corrientes 1234"
+            value={direccion}
+            onChange={(e) => setDireccion(e.target.value)}
             style={styles.input}
           />
 
-          <input type="hidden" name="timezone" ref={tzRef} />
+          {error && <p style={styles.error}>{error}</p>}
 
-          <button type="submit" style={styles.submitBtn}>
-            Crear local
+          <button type="submit" disabled={loading} style={styles.submitBtn}>
+            {loading ? 'Creando...' : 'Crear local'}
           </button>
         </form>
       </div>
@@ -97,6 +128,11 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 14,
     marginBottom: 16,
     outline: 'none',
+  },
+  error: {
+    color: '#ef4444',
+    fontSize: 13,
+    marginBottom: 8,
   },
   submitBtn: {
     width: '100%',
