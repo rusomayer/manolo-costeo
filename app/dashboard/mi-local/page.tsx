@@ -278,6 +278,186 @@ export default function MiLocalPage() {
         </button>
       </div>
 
+      {/* ── SECCIÓN 0: Equipo ── */}
+      <div id="equipo" style={{ ...cardStyle, padding: '20px', marginBottom: 16 }}>
+        <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 18, color: 'var(--text-primary)' }}>👤 Equipo y colaboradores</h3>
+
+        {/* Miembros actuales */}
+        {members.length > 0 && (
+          <div style={{ marginBottom: 20 }}>
+            <p style={labelStyle}>Miembros</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {members.map(m => (
+                <div key={m.id} style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '8px 12px',
+                  background: 'var(--bg-secondary)',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border)',
+                }}>
+                  <div style={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: '50%',
+                    background: 'var(--accent)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: '#fff',
+                    flexShrink: 0,
+                  }}>
+                    {m.email[0]?.toUpperCase()}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: 13, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {m.email} {m.isMe && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>(vos)</span>}
+                    </p>
+                  </div>
+                  <span style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    padding: '2px 8px',
+                    borderRadius: 10,
+                    background: m.rol === 'owner' ? '#f59e0b22' : 'var(--bg-tertiary)',
+                    color: m.rol === 'owner' ? '#b45309' : 'var(--text-muted)',
+                    flexShrink: 0,
+                  }}>
+                    {m.rol === 'owner' ? 'dueño' : 'miembro'}
+                  </span>
+                  {myRole === 'owner' && !m.isMe && m.rol !== 'owner' && (
+                    <button
+                      onClick={() => eliminarMiembro(m.id)}
+                      style={{ ...removeBtnStyle, marginLeft: 4 }}
+                      title="Eliminar del local"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Invitaciones pendientes */}
+        {pendingInvites.length > 0 && (
+          <div style={{ marginBottom: 20 }}>
+            <p style={labelStyle}>Invitaciones pendientes</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {pendingInvites.map(inv => (
+                <div key={inv.id} style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '8px 12px',
+                  background: '#ffc1071a',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid #ffc10744',
+                }}>
+                  <span style={{ fontSize: 13, color: 'var(--text-secondary)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {inv.email || 'Link sin email'}&nbsp;
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                      · vence {new Date(inv.expires_at).toLocaleDateString('es-AR')}
+                    </span>
+                  </span>
+                  <button
+                    onClick={() => reenviarInvitacion(inv.codigo)}
+                    style={{ ...btnOutlineStyle, fontSize: 12, padding: '4px 10px' }}
+                    title="Copiar link de invitación"
+                  >
+                    Copiar link
+                  </button>
+                  <a
+                    href={`https://wa.me/?text=${encodeURIComponent(`Te invito a unirte a mi local en Manolo Costeo: ${window.location.origin}/invite/${inv.codigo}`)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 5,
+                      padding: '4px 10px',
+                      background: '#25D366',
+                      color: '#fff',
+                      borderRadius: 'var(--radius-sm)',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      textDecoration: 'none',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                    </svg>
+                    WA
+                  </a>
+                  {myRole === 'owner' && (
+                    <button
+                      onClick={() => eliminarInvitacion(inv.id)}
+                      style={{ ...removeBtnStyle }}
+                      title="Cancelar invitación"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Formulario invitar */}
+        <div>
+          <p style={labelStyle}>Invitar nuevo colaborador</p>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <input
+              type="email"
+              placeholder="Email (opcional)"
+              value={inviteEmail}
+              onChange={e => setInviteEmail(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && generarInvitacion()}
+              style={{ ...inputStyle, flex: 1, minWidth: 180 }}
+            />
+            <button onClick={generarInvitacion} disabled={inviteLoading} style={btnPrimaryStyle}>
+              {inviteLoading ? 'Generando...' : 'Generar link'}
+            </button>
+          </div>
+          <p style={hintStyle}>El email es opcional. El link expira en 7 días.</p>
+        </div>
+
+        {inviteLink && (
+          <div style={{ marginTop: 14, padding: '12px 14px', background: '#1987541a', border: '1px solid var(--success)', borderRadius: 'var(--radius-sm)' }}>
+            <p style={{ fontSize: 13, color: 'var(--success)', fontWeight: 600, marginBottom: 6 }}>Link copiado al portapapeles</p>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', wordBreak: 'break-all', marginBottom: 10 }}>{inviteLink}</p>
+            <a
+              href={`https://wa.me/?text=${encodeURIComponent(`Te invito a unirte a mi local en Manolo Costeo: ${inviteLink}`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '8px 14px',
+                background: '#25D366',
+                color: '#fff',
+                borderRadius: 'var(--radius-sm)',
+                fontSize: 13,
+                fontWeight: 600,
+                textDecoration: 'none',
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+              </svg>
+              Compartir por WhatsApp
+            </a>
+          </div>
+        )}
+      </div>
+
       {/* ── SECCIÓN 1: Datos básicos ── */}
       <SectionCard title="📍 Datos básicos">
         <TwoCol>
