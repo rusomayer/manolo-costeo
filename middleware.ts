@@ -42,10 +42,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Authenticated -> redirect away from login page
+  // Authenticated -> redirect away from login page (but respect ?next= param)
   if (user && path === '/') {
+    const next = request.nextUrl.searchParams.get('next');
     const url = request.nextUrl.clone();
-    url.pathname = '/dashboard';
+    url.pathname = next || '/dashboard';
+    url.searchParams.delete('next');
     return NextResponse.redirect(url);
   }
 

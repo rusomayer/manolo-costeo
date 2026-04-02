@@ -13,12 +13,13 @@ export async function crearLocal(formData: FormData) {
 
   const nombre = formData.get('nombre') as string;
   const direccion = formData.get('direccion') as string;
+  const timezone = formData.get('timezone') as string || 'America/Buenos_Aires';
 
   // Use service client to bypass RLS (user is validated above)
   const db = createServiceClient();
   const { data, error } = await db
     .from('locales')
-    .insert([{ nombre, direccion, owner_id: user.id }])
+    .insert([{ nombre, direccion, owner_id: user.id, timezone }])
     .select()
     .single();
 

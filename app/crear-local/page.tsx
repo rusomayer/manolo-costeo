@@ -1,41 +1,24 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRef, useState } from 'react';
+import { crearLocal } from '@/lib/actions';
 
 export default function CrearLocalPage() {
-  const router = useRouter();
-  const [nombre, setNombre] = useState('');
-  const [direccion, setDireccion] = useState('');
+  const tzRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  async function handleSubmit(formData: FormData) {
     setLoading(true);
     setError('');
 
+    // Inject timezone before submitting
+    formData.set('timezone', Intl.DateTimeFormat().resolvedOptions().timeZone);
+
     try {
-      const res = await fetch('/api/crear-local', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nombre,
-          direccion,
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        setError(data.error || 'Error al crear el local');
-        return;
-      }
-
-      router.push('/dashboard');
-    } catch {
-      setError('Error de conexion. Intenta de nuevo.');
-    } finally {
+      await crearLocal(formData);
+    } catch (e: any) {
+      setError(e?.message || 'Error al crear el local');
       setLoading(false);
     }
   }
@@ -49,25 +32,27 @@ export default function CrearLocalPage() {
           Agrega tu cafe, bar o restaurante para empezar a registrar gastos.
         </p>
 
-        <form onSubmit={handleSubmit}>
-          <label style={styles.label}>Nombre del local</label>
+        <form action={handleSubmit}>
+          <label style={styles.label} htmlFor="nombre">Nombre del local</label>
           <input
+            id="nombre"
+            name="nombre"
             type="text"
             placeholder="Ej: Cafe Manolo"
             required
-            value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
             style={styles.input}
           />
 
-          <label style={styles.label}>Direccion (opcional)</label>
+          <label style={styles.label} htmlFor="direccion">Direccion (opcional)</label>
           <input
+            id="direccion"
+            name="direccion"
             type="text"
             placeholder="Ej: Av. Corrientes 1234"
-            value={direccion}
-            onChange={(e) => setDireccion(e.target.value)}
             style={styles.input}
           />
+
+          <input type="hidden" name="timezone" ref={tzRef} />
 
           {error && <p style={styles.error}>{error}</p>}
 
