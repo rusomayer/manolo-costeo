@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createServiceClient } from '@/lib/supabase/service';
-import { cookies } from 'next/headers';
 
 export async function POST(request: NextRequest) {
   const supabase = createClient();
@@ -28,11 +27,12 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (error) {
+    console.error('Error creando local:', error);
     return NextResponse.json({ error: 'Error al crear el local' }, { status: 500 });
   }
 
-  const cookieStore = cookies();
-  cookieStore.set('selected_local', data.id, { path: '/', maxAge: 60 * 60 * 24 * 365 });
+  const response = NextResponse.json({ ok: true, id: data.id });
+  response.cookies.set('selected_local', data.id, { path: '/', maxAge: 60 * 60 * 24 * 365 });
 
-  return NextResponse.json({ ok: true, id: data.id });
+  return response;
 }
