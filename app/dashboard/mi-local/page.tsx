@@ -4,6 +4,22 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import type { Local, DiaSemana, Horarios, RolEmpleado } from '@/lib/types';
 
+interface MemberWithEmail {
+  id: string;
+  user_id: string;
+  rol: string;
+  email: string;
+  isMe: boolean;
+}
+
+interface PendingInvite {
+  id: string;
+  codigo: string;
+  tipo: string;
+  email?: string;
+  expires_at: string;
+}
+
 const DIAS: DiaSemana[] = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
 
 const DIAS_LABEL: Record<DiaSemana, string> = {
@@ -39,7 +55,36 @@ export default function MiLocalPage() {
   const [nuevoRol, setNuevoRol] = useState('');
   const [horarios, setHorarios] = useState<Horarios>(DEFAULT_HORARIOS);
 
+  // Equipo
+  const [members, setMembers] = useState<MemberWithEmail[]>([]);
+  const [myRole, setMyRole] = useState('');
+  const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteLink, setInviteLink] = useState('');
+  const [inviteLoading, setInviteLoading] = useState(false);
+
   const supabase = createClient();
+
+  async function loadTeam() {
+    const localId = getLocalId();
+    if (!localId) return;
+
+    const res = await fetch(`/api/members?local_id=${localId}`);
+    if (res.ok) {
+      const data = await res.json();
+      setMembers(data.members || []);
+      setMyRole(data.myRole || '');
+    }
+
+    const { data: invites } = await supabase
+      .from('invitations')
+      .select('id, codigo, tipo, email, expires_at')
+      .eq('local_id', localId)
+      .eq('estado', 'pending')
+      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false });
+    setPendingInvites(invites || []);
+  }
 
   useEffect(() => {
     async function load() {
@@ -59,6 +104,7 @@ export default function MiLocalPage() {
       }
     }
     load();
+    loadTeam();
   }, []);
 
   function update<K extends keyof Local>(field: K, value: Local[K]) {
@@ -127,6 +173,55 @@ export default function MiLocalPage() {
       ...prev,
       [dia]: { ...prev[dia], [field]: value },
     }));
+  }
+
+  async function generarInvitacion() {
+    const localId = getLocalId();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user || !localId) return;
+    setInviteLoading(true);
+
+    const { data } = await supabase
+      .from('invitations')
+      .insert([{
+        local_id: localId,
+        tipo: inviteEmail ? 'email' : 'link',
+        email: inviteEmail || null,
+        created_by: user.id,
+      }])
+      .select()
+      .single();
+
+    if (data) {
+      const url = `${window.location.origin}/invite/${data.codigo}`;
+      setInviteLink(url);
+      navigator.clipboard.writeText(url);
+      setInviteEmail('');
+      await loadTeam();
+    }
+    setInviteLoading(false);
+  }
+
+  async function eliminarMiembro(memberId: string) {
+    const localId = getLocalId();
+    if (!confirm('¿Eliminar este miembro del local?')) return;
+    await fetch('/api/members', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ memberId, localId }),
+    });
+    await loadTeam();
+  }
+
+  async function reenviarInvitacion(codigo: string) {
+    const url = `${window.location.origin}/invite/${codigo}`;
+    navigator.clipboard.writeText(url);
+    setInviteLink(url);
+  }
+
+  async function eliminarInvitacion(inviteId: string) {
+    await supabase.from('invitations').update({ estado: 'expired' }).eq('id', inviteId);
+    await loadTeam();
   }
 
   function agregarRol() {

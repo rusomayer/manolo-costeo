@@ -14,6 +14,7 @@ import {
   Settings,
   ChevronDown,
   Plus,
+  UserPlus,
   type LucideIcon,
 } from 'lucide-react';
 import { Local } from '@/lib/types';
@@ -136,6 +137,14 @@ export default function Sidebar({ locales, selectedLocal, userEmail, telegramLin
               >
                 <Plus size={13} />
                 Agregar local
+              </a>
+              <a
+                href="/dashboard/mi-local#equipo"
+                style={styles.localDropdownAdd}
+                onClick={() => setLocalMenuOpen(false)}
+              >
+                <UserPlus size={13} />
+                Invitar colaborador
               </a>
             </div>
           </div>
