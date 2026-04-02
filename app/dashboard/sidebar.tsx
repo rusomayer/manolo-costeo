@@ -147,7 +147,7 @@ export default function Sidebar({ locales, selectedLocal, userEmail, telegramLin
             ))}
             <div style={{ borderTop: '1px solid var(--border)', marginTop: 4, paddingTop: 4 }}>
               <a
-                href="/dashboard/nuevo-local"
+                href="/crear-local"
                 style={styles.localDropdownAdd}
                 onClick={() => setLocalMenuOpen(false)}
               >
