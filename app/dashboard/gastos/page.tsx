@@ -38,6 +38,7 @@ export default function GastosPage() {
   const [gastoEliminando, setGastoEliminando] = useState<string | null>(null);
 
   // Multi-select
+  const [modoSeleccion, setModoSeleccion] = useState(false);
   const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
   const [eliminandoMultiple, setEliminandoMultiple] = useState(false);
   const [confirmMultiple, setConfirmMultiple] = useState(false);
@@ -58,6 +59,7 @@ export default function GastosPage() {
       const data = await res.json();
       setGastos(data.gastos || []);
       setSeleccionados(new Set());
+      setModoSeleccion(false);
     } catch (error) {
       console.error('Error cargando gastos:', error);
     }
@@ -144,6 +146,9 @@ export default function GastosPage() {
 
   const haySeleccionados = seleccionados.size > 0;
   const todosSeleccionados = gastosFiltrados.length > 0 && seleccionados.size === gastosFiltrados.length;
+  const gridCols = modoSeleccion
+    ? '40px 100px 1fr 120px 110px 100px 80px 60px'
+    : '100px 1fr 120px 110px 100px 80px 60px';
 
   return (
     <div style={{ minHeight: '100vh', padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
@@ -157,21 +162,56 @@ export default function GastosPage() {
         gap: '12px',
       }}>
         <h1 style={{ fontSize: '24px', fontWeight: 600 }}>Gastos</h1>
-        <button
-          onClick={() => setMostrarForm(true)}
-          style={{
-            padding: '10px 20px',
-            borderRadius: 'var(--radius-sm)',
-            border: 'none',
-            background: 'var(--accent)',
-            color: '#fff',
-            fontSize: '14px',
-            fontWeight: 600,
-            cursor: 'pointer',
-          }}
-        >
-          + Agregar gasto
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {!modoSeleccion ? (
+            <button
+              onClick={() => setModoSeleccion(true)}
+              style={{
+                padding: '10px 16px',
+                borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--border)',
+                background: 'var(--bg-primary)',
+                color: 'var(--text-secondary)',
+                fontSize: '13px',
+                fontWeight: 500,
+                cursor: 'pointer',
+              }}
+            >
+              Seleccionar
+            </button>
+          ) : (
+            <button
+              onClick={() => { setModoSeleccion(false); setSeleccionados(new Set()); }}
+              style={{
+                padding: '10px 16px',
+                borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--border)',
+                background: 'var(--bg-primary)',
+                color: 'var(--text-secondary)',
+                fontSize: '13px',
+                fontWeight: 500,
+                cursor: 'pointer',
+              }}
+            >
+              Cancelar
+            </button>
+          )}
+          <button
+            onClick={() => setMostrarForm(true)}
+            style={{
+              padding: '10px 20px',
+              borderRadius: 'var(--radius-sm)',
+              border: 'none',
+              background: 'var(--accent)',
+              color: '#fff',
+              fontSize: '14px',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            + Agregar gasto
+          </button>
+        </div>
       </div>
 
       {/* Filtros */}
@@ -215,7 +255,7 @@ export default function GastosPage() {
         <p style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
           {gastosFiltrados.length} gasto{gastosFiltrados.length !== 1 ? 's' : ''} encontrado{gastosFiltrados.length !== 1 ? 's' : ''}
         </p>
-        {haySeleccionados && (
+        {modoSeleccion && haySeleccionados && (
           <button
             onClick={() => setConfirmMultiple(true)}
             style={{
@@ -262,7 +302,7 @@ export default function GastosPage() {
           {/* Table header */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: '40px 100px 1fr 120px 110px 100px 80px 60px',
+            gridTemplateColumns: gridCols,
             padding: '12px 16px',
             borderBottom: '1px solid var(--border)',
             background: 'var(--bg-secondary)',
@@ -273,14 +313,16 @@ export default function GastosPage() {
             letterSpacing: '0.5px',
             alignItems: 'center',
           }}>
-            <span style={{ display: 'flex', justifyContent: 'center' }}>
-              <input
-                type="checkbox"
-                checked={todosSeleccionados}
-                onChange={toggleTodos}
-                style={{ cursor: 'pointer', width: 15, height: 15, accentColor: 'var(--accent)' }}
-              />
-            </span>
+            {modoSeleccion && (
+              <span style={{ display: 'flex', justifyContent: 'center' }}>
+                <input
+                  type="checkbox"
+                  checked={todosSeleccionados}
+                  onChange={toggleTodos}
+                  style={{ cursor: 'pointer', width: 15, height: 15, accentColor: 'var(--accent)' }}
+                />
+              </span>
+            )}
             <span>Fecha</span>
             <span>Descripcion</span>
             <span>Categoria</span>
@@ -296,7 +338,7 @@ export default function GastosPage() {
               key={gasto.id}
               style={{
                 display: 'grid',
-                gridTemplateColumns: '40px 100px 1fr 120px 110px 100px 80px 60px',
+                gridTemplateColumns: gridCols,
                 padding: '14px 16px',
                 borderBottom: '1px solid var(--border)',
                 cursor: 'pointer',
@@ -305,14 +347,16 @@ export default function GastosPage() {
                 background: seleccionados.has(gasto.id) ? 'var(--bg-secondary)' : 'transparent',
               }}
             >
-              <span style={{ display: 'flex', justifyContent: 'center' }} onClick={(e) => e.stopPropagation()}>
-                <input
-                  type="checkbox"
-                  checked={seleccionados.has(gasto.id)}
-                  onChange={() => toggleSeleccion(gasto.id)}
-                  style={{ cursor: 'pointer', width: 15, height: 15, accentColor: 'var(--accent)' }}
-                />
-              </span>
+              {modoSeleccion && (
+                <span style={{ display: 'flex', justifyContent: 'center' }} onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    checked={seleccionados.has(gasto.id)}
+                    onChange={() => toggleSeleccion(gasto.id)}
+                    style={{ cursor: 'pointer', width: 15, height: 15, accentColor: 'var(--accent)' }}
+                  />
+                </span>
+              )}
               <span
                 onClick={() => setGastoEditando(gasto)}
                 style={{ color: 'var(--text-secondary)', fontSize: '13px' }}
