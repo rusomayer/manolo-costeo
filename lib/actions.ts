@@ -4,6 +4,11 @@ import { createClient } from '@/lib/supabase/server';
 import { createServiceClient } from '@/lib/supabase/service';
 import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
+import crypto from 'crypto';
+
+function generarCodigo(prefix: string): string {
+  return `${prefix}_${crypto.randomBytes(6).toString('hex')}`;
+}
 
 export async function crearLocal(formData: FormData) {
   const supabase = createClient();
@@ -19,7 +24,14 @@ export async function crearLocal(formData: FormData) {
   const db = createServiceClient();
   const { data, error } = await db
     .from('locales')
-    .insert([{ nombre, direccion, owner_id: user.id, timezone }])
+    .insert([{
+      nombre,
+      direccion,
+      owner_id: user.id,
+      timezone,
+      telegram_code: generarCodigo('tg'),
+      twilio_code: generarCodigo('tw'),
+    }])
     .select()
     .single();
 

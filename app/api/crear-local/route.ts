@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createServiceClient } from '@/lib/supabase/service';
+import crypto from 'crypto';
 
 export async function POST(request: NextRequest) {
   const supabase = createClient();
@@ -22,7 +23,14 @@ export async function POST(request: NextRequest) {
   const db = createServiceClient();
   const { data, error } = await db
     .from('locales')
-    .insert([{ nombre, direccion, owner_id: user.id, timezone }])
+    .insert([{
+      nombre,
+      direccion,
+      owner_id: user.id,
+      timezone,
+      telegram_code: `tg_${crypto.randomBytes(6).toString('hex')}`,
+      twilio_code: `tw_${crypto.randomBytes(6).toString('hex')}`,
+    }])
     .select()
     .single();
 
