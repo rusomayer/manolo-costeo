@@ -31,6 +31,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Error al crear el local' }, { status: 500 });
   }
 
+  // Add creator as owner member
+  await db
+    .from('local_members')
+    .insert([{ local_id: data.id, user_id: user.id, rol: 'owner' }]);
+
   const response = NextResponse.json({ ok: true, id: data.id });
   response.cookies.set('selected_local', data.id, { path: '/', maxAge: 60 * 60 * 24 * 365 });
 

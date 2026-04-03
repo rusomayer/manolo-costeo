@@ -25,6 +25,11 @@ export async function crearLocal(formData: FormData) {
 
   if (error) throw new Error(error.message);
 
+  // Add creator as owner member
+  await db
+    .from('local_members')
+    .insert([{ local_id: data.id, user_id: user.id, rol: 'owner' }]);
+
   // Set selected local cookie
   const cookieStore = cookies();
   cookieStore.set('selected_local', data.id, { path: '/', maxAge: 60 * 60 * 24 * 365 });
