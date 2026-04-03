@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import {
-  MapPin, Building2, Settings2, Users, Users2, DollarSign, Target,
+  MapPin, Building2, Settings2, Users, Users2, DollarSign, Target, Trash2,
   type LucideIcon,
 } from 'lucide-react';
 import type { Local, DiaSemana, HorarioRango, Empleado } from '@/lib/types';
@@ -89,6 +90,12 @@ export default function MiLocalPage() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteLoading, setInviteLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Eliminar local
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const router = useRouter();
 
   // ── Load ──────────────────────────────────────────────────────────────────
 
@@ -271,6 +278,29 @@ export default function MiLocalPage() {
     ...(local.roles_empleados || []).map(r => r.rol),
     ...empleados.map(e => e.rol).filter(Boolean),
   ]));
+
+  // ── Eliminar local ────────────────────────────────────────────────────────
+
+  async function handleDeleteLocal() {
+    if (!local || deleteConfirmText !== local.nombre) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/locales/${local.id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || 'Error al eliminar el local');
+        setDeleting(false);
+        return;
+      }
+      // Clear selected local cookie
+      document.cookie = 'selected_local=; path=/; max-age=0';
+      router.push('/dashboard');
+      router.refresh();
+    } catch {
+      alert('Error de conexion');
+      setDeleting(false);
+    }
+  }
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -768,6 +798,72 @@ export default function MiLocalPage() {
           </>
         }
       />
+
+      {/* ── Zona de peligro ── */}
+      {myRole === 'owner' && (
+        <div style={{ ...cardStyle, marginBottom: 16, borderColor: 'var(--danger, #ef4444)', borderWidth: 1 }}>
+          <h3 style={{ ...sectionTitleStyle, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--danger, #ef4444)' }}>
+            <Trash2 size={16} style={{ flexShrink: 0 }} />
+            Zona de peligro
+          </h3>
+
+          {!showDeleteConfirm ? (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <p style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500 }}>Eliminar este local</p>
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Se eliminan todos los gastos, recetas y datos asociados.</p>
+              </div>
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                style={{ padding: '7px 14px', fontSize: 12, fontWeight: 600, border: '1px solid var(--danger, #ef4444)', borderRadius: 'var(--radius-sm)', background: 'transparent', color: 'var(--danger, #ef4444)', cursor: 'pointer' }}
+              >
+                Eliminar local
+              </button>
+            </div>
+          ) : (
+            <div>
+              <div style={{ padding: 14, background: '#ef44441a', borderRadius: 'var(--radius-sm)', marginBottom: 14 }}>
+                <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--danger, #ef4444)', marginBottom: 4 }}>
+                  Esta accion no puede ser revertida
+                </p>
+                <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                  Se van a eliminar permanentemente todos los gastos, recetas, proveedores, precios, miembros e invitaciones de <strong>{local.nombre}</strong>.
+                </p>
+              </div>
+              <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                Escribi <strong>{local.nombre}</strong> para confirmar:
+              </p>
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={e => setDeleteConfirmText(e.target.value)}
+                placeholder={local.nombre}
+                style={{ ...inputStyle, marginBottom: 12, borderColor: 'var(--danger, #ef4444)' }}
+              />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText(''); }}
+                  style={{ padding: '8px 16px', fontSize: 12, fontWeight: 500, border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-primary)', color: 'var(--text-secondary)', cursor: 'pointer' }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleDeleteLocal}
+                  disabled={deleteConfirmText !== local.nombre || deleting}
+                  style={{
+                    padding: '8px 16px', fontSize: 12, fontWeight: 600, border: 'none', borderRadius: 'var(--radius-sm)',
+                    background: deleteConfirmText === local.nombre ? 'var(--danger, #ef4444)' : '#ccc',
+                    color: '#fff', cursor: deleteConfirmText === local.nombre ? 'pointer' : 'not-allowed',
+                    opacity: deleting ? 0.6 : 1,
+                  }}
+                >
+                  {deleting ? 'Eliminando...' : 'Eliminar permanentemente'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
