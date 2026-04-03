@@ -37,6 +37,11 @@ export default function GastosPage() {
   const [gastoEditando, setGastoEditando] = useState<Gasto | undefined>();
   const [gastoEliminando, setGastoEliminando] = useState<string | null>(null);
 
+  // Multi-select
+  const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
+  const [eliminandoMultiple, setEliminandoMultiple] = useState(false);
+  const [confirmMultiple, setConfirmMultiple] = useState(false);
+
   useEffect(() => {
     cargarDatos();
   }, [desde, hasta, filtroCategoria]);
@@ -52,6 +57,7 @@ export default function GastosPage() {
       const res = await fetch(`/api/gastos?${params}`);
       const data = await res.json();
       setGastos(data.gastos || []);
+      setSeleccionados(new Set());
     } catch (error) {
       console.error('Error cargando gastos:', error);
     }
@@ -96,12 +102,48 @@ export default function GastosPage() {
     cargarDatos();
   }
 
+  async function handleEliminarMultiple() {
+    setEliminandoMultiple(true);
+    try {
+      const promises = Array.from(seleccionados).map(id =>
+        fetch(`/api/gastos/${id}`, { method: 'DELETE' })
+      );
+      await Promise.all(promises);
+      setSeleccionados(new Set());
+      setConfirmMultiple(false);
+      cargarDatos();
+    } catch (error) {
+      console.error('Error eliminando gastos:', error);
+    }
+    setEliminandoMultiple(false);
+  }
+
+  function toggleSeleccion(id: string) {
+    setSeleccionados(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleTodos() {
+    if (seleccionados.size === gastosFiltrados.length) {
+      setSeleccionados(new Set());
+    } else {
+      setSeleccionados(new Set(gastosFiltrados.map(g => g.id)));
+    }
+  }
+
   const formatMonto = (monto: number) =>
     new Intl.NumberFormat('es-AR', {
       style: 'currency',
       currency: 'ARS',
       minimumFractionDigits: 0,
     }).format(monto);
+
+  const haySeleccionados = seleccionados.size > 0;
+  const todosSeleccionados = gastosFiltrados.length > 0 && seleccionados.size === gastosFiltrados.length;
 
   return (
     <div style={{ minHeight: '100vh', padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
@@ -150,7 +192,7 @@ export default function GastosPage() {
           onChange={(e) => setFiltroCategoria(e.target.value)}
           style={selectStyle}
         >
-          <option value="">Todas las categorías</option>
+          <option value="">Todas las categorias</option>
           {Object.entries(CATEGORIA_EMOJI).map(([cat, emoji]) => (
             <option key={cat} value={cat}>
               {emoji} {cat.charAt(0).toUpperCase() + cat.slice(1)}
@@ -168,10 +210,32 @@ export default function GastosPage() {
         </select>
       </div>
 
-      {/* Counter */}
-      <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
-        {gastosFiltrados.length} gasto{gastosFiltrados.length !== 1 ? 's' : ''} encontrado{gastosFiltrados.length !== 1 ? 's' : ''}
-      </p>
+      {/* Counter + bulk actions */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        <p style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
+          {gastosFiltrados.length} gasto{gastosFiltrados.length !== 1 ? 's' : ''} encontrado{gastosFiltrados.length !== 1 ? 's' : ''}
+        </p>
+        {haySeleccionados && (
+          <button
+            onClick={() => setConfirmMultiple(true)}
+            style={{
+              padding: '6px 14px',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--danger, #ef4444)',
+              background: 'transparent',
+              color: 'var(--danger, #ef4444)',
+              fontSize: '12px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+          >
+            🗑 Eliminar {seleccionados.size} seleccionado{seleccionados.size !== 1 ? 's' : ''}
+          </button>
+        )}
+      </div>
 
       {loading ? (
         <div style={{ textAlign: 'center', padding: '48px', color: 'var(--text-secondary)' }}>
@@ -186,7 +250,7 @@ export default function GastosPage() {
           borderRadius: 'var(--radius)',
           border: '1px solid var(--border)',
         }}>
-          No hay gastos en este período.
+          No hay gastos en este periodo.
         </div>
       ) : (
         <div style={{
@@ -198,7 +262,7 @@ export default function GastosPage() {
           {/* Table header */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: '100px 1fr 120px 110px 100px 80px 60px',
+            gridTemplateColumns: '40px 100px 1fr 120px 110px 100px 80px 60px',
             padding: '12px 16px',
             borderBottom: '1px solid var(--border)',
             background: 'var(--bg-secondary)',
@@ -207,10 +271,19 @@ export default function GastosPage() {
             color: 'var(--text-secondary)',
             textTransform: 'uppercase' as const,
             letterSpacing: '0.5px',
+            alignItems: 'center',
           }}>
+            <span style={{ display: 'flex', justifyContent: 'center' }}>
+              <input
+                type="checkbox"
+                checked={todosSeleccionados}
+                onChange={toggleTodos}
+                style={{ cursor: 'pointer', width: 15, height: 15, accentColor: 'var(--accent)' }}
+              />
+            </span>
             <span>Fecha</span>
-            <span>Descripción</span>
-            <span>Categoría</span>
+            <span>Descripcion</span>
+            <span>Categoria</span>
             <span>Proveedor</span>
             <span style={{ textAlign: 'right' }}>Monto</span>
             <span style={{ textAlign: 'center' }}>Tipo</span>
@@ -221,24 +294,35 @@ export default function GastosPage() {
           {gastosFiltrados.map((gasto) => (
             <div
               key={gasto.id}
-              onClick={() => setGastoEditando(gasto)}
               style={{
                 display: 'grid',
-                gridTemplateColumns: '100px 1fr 120px 110px 100px 80px 60px',
+                gridTemplateColumns: '40px 100px 1fr 120px 110px 100px 80px 60px',
                 padding: '14px 16px',
                 borderBottom: '1px solid var(--border)',
                 cursor: 'pointer',
                 alignItems: 'center',
                 fontSize: '14px',
+                background: seleccionados.has(gasto.id) ? 'var(--bg-secondary)' : 'transparent',
               }}
             >
-              <span style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>
+              <span style={{ display: 'flex', justifyContent: 'center' }} onClick={(e) => e.stopPropagation()}>
+                <input
+                  type="checkbox"
+                  checked={seleccionados.has(gasto.id)}
+                  onChange={() => toggleSeleccion(gasto.id)}
+                  style={{ cursor: 'pointer', width: 15, height: 15, accentColor: 'var(--accent)' }}
+                />
+              </span>
+              <span
+                onClick={() => setGastoEditando(gasto)}
+                style={{ color: 'var(--text-secondary)', fontSize: '13px' }}
+              >
                 {new Date(gasto.fecha + 'T12:00:00').toLocaleDateString('es-AR', {
                   day: 'numeric',
                   month: 'short',
                 })}
               </span>
-              <div>
+              <div onClick={() => setGastoEditando(gasto)}>
                 <span style={{ fontWeight: 500 }}>{gasto.descripcion}</span>
                 {gasto.cantidad && gasto.unidad && (
                   <span style={{ color: 'var(--text-secondary)', fontSize: '12px', marginLeft: '6px' }}>
@@ -251,17 +335,17 @@ export default function GastosPage() {
                   </p>
                 )}
               </div>
-              <span style={{ fontSize: '13px' }}>
+              <span onClick={() => setGastoEditando(gasto)} style={{ fontSize: '13px' }}>
                 {CATEGORIA_EMOJI[gasto.categoria] || '📦'}{' '}
                 {gasto.categoria.charAt(0).toUpperCase() + gasto.categoria.slice(1)}
               </span>
-              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+              <span onClick={() => setGastoEditando(gasto)} style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
                 {gasto.proveedor || '-'}
               </span>
-              <span style={{ textAlign: 'right', fontWeight: 500, color: 'var(--danger)' }}>
+              <span onClick={() => setGastoEditando(gasto)} style={{ textAlign: 'right', fontWeight: 500, color: 'var(--danger)' }}>
                 -{formatMonto(gasto.monto)}
               </span>
-              <span style={{ textAlign: 'center' }}>
+              <span onClick={() => setGastoEditando(gasto)} style={{ textAlign: 'center' }}>
                 <span style={{
                   display: 'inline-block',
                   padding: '2px 8px',
@@ -329,12 +413,20 @@ export default function GastosPage() {
         )}
       </ModalGasto>
 
-      {/* Confirm: Eliminar */}
+      {/* Confirm: Eliminar uno */}
       <ConfirmDialog
         abierto={!!gastoEliminando}
-        mensaje="¿Estás seguro que querés eliminar este gasto? Esta acción no se puede deshacer."
+        mensaje="¿Estas seguro que queres eliminar este gasto? Esta accion no se puede deshacer."
         onConfirmar={handleEliminar}
         onCancelar={() => setGastoEliminando(null)}
+      />
+
+      {/* Confirm: Eliminar multiple */}
+      <ConfirmDialog
+        abierto={confirmMultiple}
+        mensaje={`¿Estas seguro que queres eliminar ${seleccionados.size} gasto${seleccionados.size !== 1 ? 's' : ''}? Esta accion no se puede deshacer.`}
+        onConfirmar={handleEliminarMultiple}
+        onCancelar={() => setConfirmMultiple(false)}
       />
     </div>
   );
