@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createServiceClient } from '@/lib/supabase/service';
 import { actualizarGasto, eliminarGasto } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
@@ -60,9 +61,11 @@ export async function DELETE(
   try {
     const acceso = await verificarAcceso(request);
     if ('error' in acceso && acceso.error) return acceso.error;
-    const { supabase, localId } = acceso as { supabase: any; localId: string };
+    const { localId } = acceso as { supabase: any; localId: string };
 
-    await eliminarGasto(supabase, params.id, localId);
+    // Use service client to bypass RLS for delete
+    const db = createServiceClient();
+    await eliminarGasto(db, params.id, localId);
 
     return NextResponse.json({ ok: true });
   } catch (error) {
