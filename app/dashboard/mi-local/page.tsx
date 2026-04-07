@@ -151,6 +151,15 @@ export default function MiLocalPage() {
       setSavedSection(section);
       setEditingSection(null);
       setTimeout(() => setSavedSection(null), 2000);
+
+      // Sync costos fijos o sueldos a la planilla de gastos
+      if (section === 'costos') {
+        fetch('/api/gastos/sync-costos-fijos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tipo: 'costos' }),
+        }).catch(console.error);
+      }
     }
   }
 
@@ -170,6 +179,13 @@ export default function MiLocalPage() {
     if (!local) return;
     await supabase.from('locales').update({ empleados: lista }).eq('id', local.id);
     setEmpleados(lista);
+
+    // Sync sueldos a la planilla de gastos
+    fetch('/api/gastos/sync-costos-fijos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tipo: 'sueldos' }),
+    }).catch(console.error);
   }
 
   function startAddEmpleado() {
