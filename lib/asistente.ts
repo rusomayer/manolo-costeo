@@ -1,9 +1,10 @@
-import Anthropic from '@anthropic-ai/sdk';
+// Migrado a @agency/anthropic el 2026-05-11 (Fase 5.1 — piloto).
+// Routed through Vercel AI Gateway para observability + tracking de costos.
+import type Anthropic from '@anthropic-ai/sdk';
+import { getAnthropicClient } from '@rusomayer/anthropic/client';
 import { SupabaseClient } from '@supabase/supabase-js';
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+const anthropic = getAnthropicClient();
 
 const SYSTEM_PROMPT = `Sos Manolo, un asistente experto en costos gastronómicos para cafés, bares y restaurantes.
 Tenés acceso a herramientas para consultar la base de datos del local del usuario.
