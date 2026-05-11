@@ -12,8 +12,8 @@ importers:
         specifier: ^0.52.0
         version: 0.52.0
       '@rusomayer/anthropic':
-        specifier: ^0.1.0
-        version: 0.1.0(@anthropic-ai/sdk@0.52.0)(ai@6.0.177(zod@4.4.3))
+        specifier: ^0.1.1
+        version: 0.1.1(@anthropic-ai/sdk@0.52.0)(ai@6.0.177(zod@4.4.3))
       '@supabase/ssr':
         specifier: ^0.10.0
         version: 0.10.3(@supabase/supabase-js@2.105.4)
@@ -143,8 +143,8 @@ packages:
     resolution: {integrity: sha512-3giAOQvZiH5F9bMlMiv8+GSPMeqg0dbaeo58/0SlA9sxSqZhnUtxzX9/2FzyhS9sWQf5S0GJE0AKBrFqjpeYcg==}
     engines: {node: '>=8.0.0'}
 
-  '@rusomayer/anthropic@0.1.0':
-    resolution: {integrity: sha512-BIBrqFqmA04hCFXSL8BKz9GmLBi4YE7hnaT16xroykx+HVhNqT5YbduFg6jYFe/1Yx2ul7JCteOrAESUd3/yeg==, tarball: https://npm.pkg.github.com/download/@rusomayer/anthropic/0.1.0/e0578f9b9775defc7d7f3fb8b0b4765d1005abb3}
+  '@rusomayer/anthropic@0.1.1':
+    resolution: {integrity: sha512-Zkp/8q6mdJQu8fCY2FPv3ewZWTBzI5DjBGmwNuvqhgGI1Y7US5zrHWCAnafZjWP7rBNjqSI4Dyi4yXNaiFvEag==, tarball: https://npm.pkg.github.com/download/@rusomayer/anthropic/0.1.1/3348d08b4f0db79cc666c8e24a81a543a3ac0258}
     peerDependencies:
       '@anthropic-ai/sdk': '>=0.52'
       ai: '>=4'
@@ -537,7 +537,7 @@ snapshots:
 
   '@opentelemetry/api@1.9.0': {}
 
-  '@rusomayer/anthropic@0.1.0(@anthropic-ai/sdk@0.52.0)(ai@6.0.177(zod@4.4.3))':
+  '@rusomayer/anthropic@0.1.1(@anthropic-ai/sdk@0.52.0)(ai@6.0.177(zod@4.4.3))':
     dependencies:
       '@anthropic-ai/sdk': 0.52.0
       ai: 6.0.177(zod@4.4.3)

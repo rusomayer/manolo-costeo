@@ -9,8 +9,8 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@rusomayer/anthropic": "^0.1.0",
     "@anthropic-ai/sdk": "^0.52.0",
+    "@rusomayer/anthropic": "^0.1.1",
     "@supabase/ssr": "^0.10.0",
     "@supabase/supabase-js": "^2.49.0",
     "lucide-react": "^1.7.0",
