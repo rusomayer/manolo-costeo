@@ -1,9 +1,8 @@
-// Migrado a @agency/anthropic el 2026-05-11 (Fase 5.1 — piloto).
-// Routed through Vercel AI Gateway para observability + tracking de costos.
+// Migrado a @rusomayer/anthropic el 2026-05-11.
+// Routed through Vercel AI Gateway. El cliente se instancia en cada call
+// para que lea el oidcToken del AsyncLocalStorage (seteado por el route).
 import { getAnthropicClient } from '@rusomayer/anthropic/client';
 import { ClaudeGastoResponse, Categoria } from './types';
-
-const anthropic = getAnthropicClient();
 
 function getSystemPrompt(timezone?: string) {
   const tz = timezone || 'America/Buenos_Aires';
@@ -139,6 +138,7 @@ FECHA: Si no se menciona fecha, usá HOY (${hoy}).`;
 }
 
 export async function procesarTexto(texto: string, timezone?: string): Promise<ClaudeGastoResponse> {
+  const anthropic = getAnthropicClient();
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-20250514',
     max_tokens: 500,
@@ -167,6 +167,7 @@ export async function procesarTexto(texto: string, timezone?: string): Promise<C
 }
 
 export async function procesarImagen(imageBuffer: Buffer, mimeType: string, caption?: string, timezone?: string): Promise<ClaudeGastoResponse[]> {
+  const anthropic = getAnthropicClient();
   const base64 = imageBuffer.toString('base64');
   const mediaType = mimeType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
 
@@ -213,6 +214,7 @@ export async function procesarImagen(imageBuffer: Buffer, mimeType: string, capt
 }
 
 export async function procesarPDF(pdfBuffer: Buffer, filename?: string, timezone?: string): Promise<ClaudeGastoResponse[]> {
+  const anthropic = getAnthropicClient();
   const base64 = pdfBuffer.toString('base64');
 
   const response = await anthropic.messages.create({
@@ -265,6 +267,7 @@ export async function procesarRespuestaFollowUp(
   campoEsperado: string,
   timezone?: string
 ): Promise<ClaudeGastoResponse> {
+  const anthropic = getAnthropicClient();
   const tz = timezone || 'America/Buenos_Aires';
   const hoy = new Date().toLocaleDateString('en-CA', { timeZone: tz });
   const response = await anthropic.messages.create({
@@ -302,6 +305,7 @@ NO incluyas "campos_faltantes" en la respuesta.`,
 export type IntencionMensaje = 'gasto' | 'consulta';
 
 export async function clasificarIntencion(texto: string): Promise<IntencionMensaje> {
+  const anthropic = getAnthropicClient();
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-20250514',
     max_tokens: 20,

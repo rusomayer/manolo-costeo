@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { oidcContext } from '@rusomayer/anthropic/context';
 import {
   WhatsAppMessage,
   WhatsAppWebhookPayload,
@@ -49,6 +50,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const oidcToken = request.headers.get("x-vercel-oidc-token") ?? "";
+  return oidcContext.run(oidcToken, async () => {
   const db = createServiceClient();
 
   try {
@@ -142,6 +145,7 @@ export async function POST(request: NextRequest) {
     console.error('Error en webhook:', error);
     return NextResponse.json({ ok: false, error: 'Internal error' }, { status: 500 });
   }
+  });
 }
 
 async function obtenerLocalInfoWA(

@@ -1,10 +1,10 @@
-// Migrado a @agency/anthropic el 2026-05-11 (Fase 5.1 — piloto).
-// Routed through Vercel AI Gateway para observability + tracking de costos.
+// Migrado a @rusomayer/anthropic el 2026-05-11.
+// Routed through Vercel AI Gateway. El cliente se instancia en cada call
+// para que lea el oidcToken del AsyncLocalStorage (seteado por el route
+// handler) y el AI Gateway pueda atribuir spend al proyecto correcto.
 import type Anthropic from '@anthropic-ai/sdk';
 import { getAnthropicClient } from '@rusomayer/anthropic/client';
 import { SupabaseClient } from '@supabase/supabase-js';
-
-const anthropic = getAnthropicClient();
 
 const SYSTEM_PROMPT = `Sos Manolo, un asistente experto en costos gastronómicos para cafés, bares y restaurantes.
 Tenés acceso a herramientas para consultar la base de datos del local del usuario.
@@ -324,6 +324,8 @@ export async function chatConManolo(
   localId: string,
   mensajes: MensajeChat[]
 ): Promise<string> {
+  const anthropic = getAnthropicClient();
+
   // Build messages for Claude API
   const claudeMessages: Anthropic.MessageParam[] = mensajes.map(m => ({
     role: m.role,

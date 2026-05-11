@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { oidcContext } from '@rusomayer/anthropic/context';
 import { createClient } from '@/lib/supabase/server';
 import { chatConManolo, MensajeChat } from '@/lib/asistente';
 
 export async function POST(request: NextRequest) {
+  const oidcToken = request.headers.get("x-vercel-oidc-token") ?? "";
+  return oidcContext.run(oidcToken, async () => {
   try {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -24,4 +27,5 @@ export async function POST(request: NextRequest) {
     console.error('Error en asistente:', error);
     return NextResponse.json({ error: 'Error procesando consulta' }, { status: 500 });
   }
+  });
 }

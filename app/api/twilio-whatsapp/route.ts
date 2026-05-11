@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { oidcContext } from '@rusomayer/anthropic/context';
 import {
   procesarTexto,
   procesarImagen,
@@ -45,6 +46,8 @@ async function enviarMensajeTwilio(to: string, body: string): Promise<void> {
 }
 
 export async function POST(request: NextRequest) {
+  const oidcToken = request.headers.get("x-vercel-oidc-token") ?? "";
+  return oidcContext.run(oidcToken, async () => {
   const db = createServiceClient();
 
   try {
@@ -137,6 +140,7 @@ export async function POST(request: NextRequest) {
     console.error('Error en webhook Twilio:', error);
     return NextResponse.json({ ok: false }, { status: 500 });
   }
+  });
 }
 
 async function procesarComandoLink(db: DB, phoneNumber: string, codigo: string) {

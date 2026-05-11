@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { oidcContext } from '@rusomayer/anthropic/context';
 import { TelegramUpdate, TelegramMessage, ClaudeGastoResponse } from '@/lib/types';
 import { enviarMensaje, obtenerArchivo, formatearRespuesta, formatearRespuestaMultiple, formatearError } from '@/lib/telegram';
 import { procesarTexto, procesarImagen, procesarPDF, transcribirAudio, procesarAudio, procesarRespuestaFollowUp, clasificarIntencion } from '@/lib/claude';
@@ -9,6 +10,8 @@ import { createServiceClient } from '@/lib/supabase/service';
 type DB = ReturnType<typeof createServiceClient>;
 
 export async function POST(request: NextRequest) {
+  const oidcToken = request.headers.get("x-vercel-oidc-token") ?? "";
+  return oidcContext.run(oidcToken, async () => {
   const db = createServiceClient();
 
   try {
@@ -85,6 +88,7 @@ export async function POST(request: NextRequest) {
     console.error('Error en webhook:', error);
     return NextResponse.json({ ok: false, error: 'Internal error' }, { status: 500 });
   }
+  });
 }
 
 async function obtenerLocalInfo(db: DB, chatId: number): Promise<{ localId: string; timezone: string } | null> {
