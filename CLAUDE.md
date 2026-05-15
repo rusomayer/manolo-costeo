@@ -25,3 +25,10 @@ App de costeo (planilla de costos fijos). Originalmente nació como prueba técn
 ---
 
 *Última actualización: 2026-05-09 (creación post-migración).*
+
+
+---
+
+## Contexto de sesión
+
+`SESSION.md` en la raíz del proyecto. Leerlo al iniciar sesión antes de cualquier otra cosa y confirmar al usuario en qué estamos. Claude lo actualiza automáticamente al cerrar sesión.

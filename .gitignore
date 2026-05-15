@@ -33,3 +33,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .claude/worktrees/laughing-ptolemy/
+
+# Contexto local de sesión — Claude lo actualiza al cerrar
+SESSION.md
