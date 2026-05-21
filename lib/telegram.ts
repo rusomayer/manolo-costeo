@@ -1,4 +1,12 @@
-const TELEGRAM_API = 'https://api.telegram.org/bot';
+import { createTelegramClient } from "@rusomayer/integrations/telegram";
+
+// Transporte Telegram: delega en @rusomayer/integrations/telegram (cliente
+// compartido). enviarMensaje/obtenerArchivo son adapters finos que preservan
+// la firma/contrato que esperan los call sites (incluido tirar en fallo, que
+// el try/catch del route ya maneja). El formateo de gastos de abajo es de
+// dominio y se queda acá.
+const TELEGRAM_FILE_API = 'https://api.telegram.org/file/bot';
+const tg = createTelegramClient();
 
 export async function enviarMensaje(
   chatId: number,
@@ -6,54 +14,27 @@ export async function enviarMensaje(
   replyToMessageId?: number,
   forceReply?: boolean
 ): Promise<{ result: { message_id: number } }> {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-
-  const body: Record<string, unknown> = {
-    chat_id: chatId,
-    text: texto,
-    parse_mode: 'HTML',
-    reply_to_message_id: replyToMessageId,
-  };
-
-  if (forceReply) {
-    body.reply_markup = { force_reply: true, selective: true };
-  }
-
-  const response = await fetch(`${TELEGRAM_API}${token}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+  const res = await tg.sendMessage(chatId, texto, {
+    parseMode: 'HTML',
+    replyToMessageId,
+    replyMarkup: forceReply ? { force_reply: true, selective: true } : undefined,
   });
-
-  if (!response.ok) {
-    const error = await response.text();
-    console.error('Error enviando mensaje:', error);
-    throw new Error(`Telegram API error: ${error}`);
-  }
-
-  return response.json();
+  if (!res.ok) throw new Error(`Telegram API error: ${res.error}`);
+  return { result: { message_id: res.value.message_id } };
 }
 
 export async function obtenerArchivo(fileId: string): Promise<{ url: string; buffer: Buffer }> {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  
-  // Obtener file_path
-  const fileResponse = await fetch(`${TELEGRAM_API}${token}/getFile?file_id=${fileId}`);
-  const fileData = await fileResponse.json();
-  
-  if (!fileData.ok) {
+  const file = await tg.getFile(fileId);
+  if (!file.ok || !file.value.file_path) {
     throw new Error('No se pudo obtener el archivo');
   }
-
-  const filePath = fileData.result.file_path;
-  const fileUrl = `https://api.telegram.org/file/bot${token}/${filePath}`;
-
-  // Descargar el archivo
-  const downloadResponse = await fetch(fileUrl);
-  const arrayBuffer = await downloadResponse.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-
-  return { url: fileUrl, buffer };
+  const downloaded = await tg.downloadFile(file.value.file_path);
+  if (!downloaded.ok) {
+    throw new Error(`No se pudo descargar el archivo: ${downloaded.error}`);
+  }
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const fileUrl = `${TELEGRAM_FILE_API}${token}/${file.value.file_path}`;
+  return { url: fileUrl, buffer: Buffer.from(downloaded.value) };
 }
 
 export function formatearRespuesta(gasto: {
