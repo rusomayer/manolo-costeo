@@ -4,6 +4,7 @@ const nextConfig = {
   // compila como código local del workspace.
   transpilePackages: [
     '@rusomayer/anthropic',
+    '@rusomayer/integrations',
     '@rusomayer/supabase',
     '@rusomayer/utils',
     '@rusomayer/prompts',
