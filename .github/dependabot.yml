@@ -1,0 +1,24 @@
+version: 2
+registries:
+  rusomayer-github:
+    type: npm-registry
+    url: https://npm.pkg.github.com
+    token: ${{secrets.GH_PACKAGES_TOKEN}}
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    registries:
+      - rusomayer-github
+    schedule:
+      interval: "weekly"
+    # Solo vigilamos los paquetes compartidos de la agencia (bajo ruido).
+    allow:
+      - dependency-name: "@rusomayer/*"
+    groups:
+      rusomayer:
+        patterns:
+          - "@rusomayer/*"
+    commit-message:
+      prefix: "chore"
+    labels:
+      - "dependencies"
